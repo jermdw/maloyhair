@@ -1,2 +1,3 @@
 # maloyhair
-Maloy Hair website
+
+🔗 [Maloy House of Hair website](https://maloy.hair)
