@@ -38,7 +38,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  margin-bottom: 3.5rem;
+  margin-bottom: 1.75rem;
 }
 
 .brand-line {
@@ -57,6 +57,19 @@ main {
    into a single typographic form, no graphic lockup needed */
 .brand-line--offset {
   padding-left: 0.9em;
+}
+
+/* ─── Description ─── */
+
+.description {
+  font-family: "Barlow Condensed", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  line-height: 1.75;
+  max-width: 28rem;
+  margin-bottom: 2.5rem;
 }
 
 /* ─── Contact ─── */
@@ -130,16 +143,12 @@ main {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.brand {
-  animation: emerge 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.contact {
-  animation: emerge 0.9s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
+.brand       { animation: emerge 0.9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.description { animation: emerge 0.9s 0.12s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.contact     { animation: emerge 0.9s 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .brand, .contact {
+  .brand, .description, .contact {
     animation: none;
   }
 }
