@@ -1,0 +1,157 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --ground: #0A0908;
+  --text: #F0EBE1;
+  --accent: #C4914D;
+  --text-dim: rgba(240, 235, 225, 0.38);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--ground);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6vh 7vw 4vh;
+}
+
+/* ─── Brand name ─── */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 3.5rem;
+}
+
+.brand-line {
+  display: block;
+  font-family: "Bodoni Moda", "Didot", "Bodoni MT", Georgia, serif;
+  font-optical-sizing: auto;
+  font-size: clamp(3.2rem, 9vw, 6.5rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+/* HAIR sits under the A of MALOY — the offset turns two words
+   into a single typographic form, no graphic lockup needed */
+.brand-line--offset {
+  padding-left: 0.9em;
+}
+
+/* ─── Contact ─── */
+
+.contact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Gold on the address: the physical place is what this page
+   exists to prove. The brand name is permanent; the place is precious. */
+.address {
+  display: block;
+  font-family: "Barlow Condensed", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+  line-height: 1.9;
+  transition: opacity 0.2s;
+}
+
+.address:hover {
+  opacity: 0.72;
+}
+
+.address:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.instagram {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-family: "Barlow Condensed", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.67rem;
+  font-weight: 300;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.25s;
+}
+
+.instagram:hover {
+  color: var(--accent);
+}
+
+.instagram:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.instagram-arrow {
+  display: inline-block;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.instagram:hover .instagram-arrow {
+  transform: translate(3px, -3px);
+}
+
+/* ─── Single animation — the room coming into focus ─── */
+
+@keyframes emerge {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.brand {
+  animation: emerge 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.contact {
+  animation: emerge 0.9s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand, .contact {
+    animation: none;
+  }
+}
+
+/* ─── Footer ─── */
+
+footer {
+  padding: 1.75rem 7vw;
+  font-family: "Barlow Condensed", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.6rem;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
