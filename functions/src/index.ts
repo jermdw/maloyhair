@@ -9,14 +9,20 @@ import { onRequest } from 'firebase-functions/v2/https'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { scheduleReminder, cancelReminder } from './reminders.js'
 import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid } from './secrets.js'
+import { findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
 
 initializeApp()
 setGlobalOptions({ region: 'us-east1' })
 
 const db = getFirestore()
 
+const COMPANY_PHONE = '(404) 394-1617'
+
 // Replace with the deployed URL of sendReminder once known (see setup docs).
 const SEND_REMINDER_URL = process.env.SEND_REMINDER_URL ?? ''
+// Replace with the deployed URL of handleInboundSms — this must also be set
+// as the "A message comes in" webhook on the Twilio Messaging Service.
+const HANDLE_INBOUND_SMS_URL = process.env.HANDLE_INBOUND_SMS_URL ?? ''
 
 export const onAppointmentCreated = onDocumentCreated('appointments/{appointmentId}', async (event) => {
   const snap = event.data
@@ -102,25 +108,67 @@ export const sendReminder = onRequest(
       twilioAuthToken.value(),
     )
 
-    const when = appointment.startTime.toDate().toLocaleString('en-US', {
-      timeZone: 'America/New_York',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    })
+    const when = formatAppointmentTime(appointment.startTime.toDate())
 
     await twilio.messages.create({
       to: client.phone,
       messagingServiceSid: twilioMessagingServiceSid.value(),
-      body:
-        kind === 'h48'
-          ? `Reminder: you have a hair appointment on ${when}. Reply to confirm.`
-          : `See you soon! Your appointment is at ${when}.`,
+      body: `Reminder: appointment with Maloy Hair on ${when}. Text ${COMPANY_PHONE} w/questions. C to confirm / X to cancel. Reply STOP to opt out.`,
     })
 
     await apptRef.update({ [`reminders.${kind}.sent`]: true })
     res.status(200).send('sent')
+  },
+)
+
+/**
+ * Twilio "A message comes in" webhook. Handles C(onfirm)/X(cancel) replies
+ * to appointment reminders. STOP/HELP are intercepted by Twilio's Advanced
+ * Opt-Out feature before they ever reach this function — see SETUP.md.
+ */
+export const handleInboundSms = onRequest(
+  { secrets: [twilioAuthToken] },
+  async (req, res) => {
+    const twilio = await import('twilio')
+
+    const signature = req.get('X-Twilio-Signature') ?? ''
+    const isValid = twilio.validateRequest(
+      twilioAuthToken.value(),
+      signature,
+      HANDLE_INBOUND_SMS_URL,
+      req.body,
+    )
+    if (!isValid) {
+      res.status(403).send('Invalid signature')
+      return
+    }
+
+    const from = (req.body.From as string) ?? ''
+    const body = ((req.body.Body as string) ?? '').trim().toUpperCase()
+
+    const twiml = new twilio.twiml.MessagingResponse()
+
+    const apptDoc = await findUpcomingAppointmentForPhone(from)
+
+    if (!apptDoc) {
+      twiml.message(`We couldn't find an upcoming appointment for this number. Call ${COMPANY_PHONE} for help.`)
+      res.type('text/xml').send(twiml.toString())
+      return
+    }
+
+    const appointment = apptDoc.data()
+    const when = formatAppointmentTime(appointment.startTime.toDate())
+
+    if (body === 'C' || body === 'CONFIRM') {
+      await apptDoc.ref.update({ status: 'confirmed' })
+      twiml.message('Thank you for confirming your appointment. Reply STOP to opt out.')
+    } else if (body === 'X' || body === 'CANCEL') {
+      await apptDoc.ref.update({ status: 'cancelled' })
+      twiml.message(`Your appointment on ${when} was successfully cancelled. Reply STOP to opt out.`)
+    } else {
+      twiml.message(`Sorry, we didn't understand that. Reply C to confirm or X to cancel your ${when} appointment, or call ${COMPANY_PHONE}.`)
+    }
+
+    res.type('text/xml').send(twiml.toString())
   },
 )
