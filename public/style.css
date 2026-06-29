@@ -164,3 +164,12 @@ footer {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+
+footer a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+footer a:hover {
+  color: var(--accent);
+}
