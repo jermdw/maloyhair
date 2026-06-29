@@ -1,0 +1,35 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // This app has exactly one user. Her identity is the verified Google
+    // account email on the auth token (set by Google's OAuth flow, not the
+    // client), so checking it here is a real server-side boundary, not just
+    // a UI gate.
+    function isOwner() {
+      return request.auth != null &&
+        request.auth.token.email == 'alexmwarren13@gmail.com';
+    }
+
+    match /clients/{clientId} {
+      allow read, write: if isOwner();
+    }
+
+    match /services/{serviceId} {
+      allow read, write: if isOwner();
+    }
+
+    match /appointments/{appointmentId} {
+      allow read, write: if isOwner();
+    }
+
+    match /settings/{docId} {
+      allow read, write: if isOwner();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

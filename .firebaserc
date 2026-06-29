@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "maloyhair"
-  }
+  },
+  "targets": {
+    "maloyhair": {
+      "hosting": {
+        "site": [
+          "maloyhair"
+        ],
+        "app": [
+          "maloyhair-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
