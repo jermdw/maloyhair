@@ -9,7 +9,7 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
-lib/
+functions/lib/
 
 # Secrets — never commit real env files or service account keys
 .env
