@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - "public/**"
-      - ".github/workflows/deploy-site.yml"
 
 jobs:
   deploy:
@@ -13,9 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: FirebaseExtended/action-hosting-deploy@v0
+        continue-on-error: true
+        id: deploy
         with:
           repoToken: "${{ secrets.GITHUB_TOKEN }}"
           firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_MALOYHAIR }}"
           projectId: maloyhair
           target: site
           channelId: live
+      - name: Verify site is live
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://maloy.hair)
+          echo "Live site HTTP status: $STATUS"
+          test "$STATUS" = "200"
