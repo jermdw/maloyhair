@@ -5,10 +5,10 @@
 }
 
 :root {
-  --ground: #0A0908;
-  --text: #F0EBE1;
-  --accent: #C4914D;
-  --text-dim: rgba(240, 235, 225, 0.38);
+  --ground: #F4EEE4;
+  --text: #2E1B0E;
+  --accent: #6B8C42;
+  --text-dim: rgba(46, 27, 14, 0.52);
 }
 
 html, body {
@@ -70,12 +70,12 @@ main {
 }
 
 .description {
-  font-family: "Barlow Condensed", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 0.8rem;
-  font-weight: 300;
-  letter-spacing: 0.04em;
+  font-family: "Lato", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   color: var(--text-dim);
-  line-height: 1.75;
+  line-height: 1.8;
 }
 
 .inline-link {
@@ -210,4 +210,30 @@ footer a {
 
 footer a:hover {
   color: var(--accent);
+}
+
+/* ─── Mobile ─── */
+
+@media (max-width: 500px) {
+  main {
+    padding: 10vw 7vw 6vw;
+    justify-content: flex-start;
+  }
+
+  .brand {
+    margin-bottom: 1.25rem;
+  }
+
+  /* Keep the typographic offset but scale it down so it doesn't clip */
+  .brand-line--offset {
+    padding-left: 0.55em;
+  }
+
+  .about {
+    margin-bottom: 2rem;
+  }
+
+  .description {
+    font-size: 0.94rem;
+  }
 }
