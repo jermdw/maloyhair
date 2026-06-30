@@ -21,3 +21,6 @@ functions/lib/
 *.key
 
 .DS_Store
+
+# Claude Code — local-only settings (permissions, etc.)
+.claude/settings.local.json
