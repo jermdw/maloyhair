@@ -1,11 +1,9 @@
 # Maloy Hair
 
-Two-part Firebase project for Alex Warren's hair salon business (operates as "Maloy Hair" — Maloy is her maiden name, used only in the `alex@maloy.hair` email; she goes by Alex Warren).
+Two-part Firebase project for Alex Warren's hair salon business, branded "Maloy Hair."
 
 1. **Marketing site** (`/public`) — static HTML/CSS, live at https://maloy.hair
 2. **Booking app** (`/app`) — React/Vite/Tailwind/shadcn client + Cloud Functions backend, for Alex's own appointment management (single-user, not client-facing)
-
-Business location: Tilted Halo salon studio, 113 Lexington Circle, Peachtree City, GA 30269. Phone: (404) 394-1617.
 
 ## Why this project exists
 
@@ -40,6 +38,8 @@ firestore.indexes.json
 firebase.json             public/ -> target site, app/dist -> target app (SPA rewrite)
 SETUP.md                  One-time manual setup steps (Firebase Auth, Twilio, secrets, Cloud Tasks)
 ```
+
+Business contact info (address, phone) is hardcoded independently in `public/index.html`, `privacy.html`, and `terms.html` — no shared template, so update all three if it changes.
 
 ## Single-owner security model
 
