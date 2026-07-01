@@ -30,6 +30,10 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    match /messages/{messageId} {
+      allow read, write: if isOwner();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

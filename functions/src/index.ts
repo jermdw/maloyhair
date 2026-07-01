@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import {
   onDocumentCreated,
   onDocumentUpdated,
@@ -9,7 +9,9 @@ import { onRequest } from 'firebase-functions/v2/https'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { scheduleReminder, cancelReminder } from './reminders.js'
 import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid } from './secrets.js'
-import { findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
+import { findClientIdByPhone, findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
+
+export { sendMessage } from './messages.js'
 
 initializeApp()
 setGlobalOptions({ region: 'us-east1' })
@@ -123,8 +125,11 @@ export const sendReminder = onRequest(
 
 /**
  * Twilio "A message comes in" webhook. Handles C(onfirm)/X(cancel) replies
- * to appointment reminders. STOP/HELP are intercepted by Twilio's Advanced
- * Opt-Out feature before they ever reach this function — see SETUP.md.
+ * to appointment reminders — STOP/HELP are intercepted by Twilio's Advanced
+ * Opt-Out feature before they ever reach this function, see SETUP.md. Any
+ * other free text from a known client is stored as an inbound message for
+ * the owner to read and respond to from the app — no auto-reply is sent for
+ * that case, since a human will handle it.
  */
 export const handleInboundSms = onRequest(
   { secrets: [twilioAuthToken] },
@@ -144,29 +149,46 @@ export const handleInboundSms = onRequest(
     }
 
     const from = (req.body.From as string) ?? ''
-    const body = ((req.body.Body as string) ?? '').trim().toUpperCase()
+    const body = ((req.body.Body as string) ?? '').trim()
+    const bodyUpper = body.toUpperCase()
 
     const twiml = new twilio.twiml.MessagingResponse()
 
-    const apptDoc = await findUpcomingAppointmentForPhone(from)
+    if (bodyUpper === 'C' || bodyUpper === 'CONFIRM' || bodyUpper === 'X' || bodyUpper === 'CANCEL') {
+      const apptDoc = await findUpcomingAppointmentForPhone(from)
 
-    if (!apptDoc) {
-      twiml.message(`We couldn't find an upcoming appointment for this number. Call ${COMPANY_PHONE} for help.`)
+      if (!apptDoc) {
+        twiml.message(`We couldn't find an upcoming appointment for this number. Call ${COMPANY_PHONE} for help.`)
+        res.type('text/xml').send(twiml.toString())
+        return
+      }
+
+      const appointment = apptDoc.data()
+      const when = formatAppointmentTime(appointment.startTime.toDate())
+
+      if (bodyUpper === 'C' || bodyUpper === 'CONFIRM') {
+        await apptDoc.ref.update({ status: 'confirmed' })
+        twiml.message('Thank you for confirming your appointment. Reply STOP to opt out.')
+      } else {
+        await apptDoc.ref.update({ status: 'cancelled' })
+        twiml.message(`Your appointment on ${when} was successfully cancelled. Reply STOP to opt out.`)
+      }
+
       res.type('text/xml').send(twiml.toString())
       return
     }
 
-    const appointment = apptDoc.data()
-    const when = formatAppointmentTime(appointment.startTime.toDate())
-
-    if (body === 'C' || body === 'CONFIRM') {
-      await apptDoc.ref.update({ status: 'confirmed' })
-      twiml.message('Thank you for confirming your appointment. Reply STOP to opt out.')
-    } else if (body === 'X' || body === 'CANCEL') {
-      await apptDoc.ref.update({ status: 'cancelled' })
-      twiml.message(`Your appointment on ${when} was successfully cancelled. Reply STOP to opt out.`)
+    const clientId = await findClientIdByPhone(from)
+    if (clientId) {
+      await db.collection('messages').add({
+        clientId,
+        direction: 'inbound',
+        body,
+        createdAt: FieldValue.serverTimestamp(),
+      })
+      // No auto-reply for a known client's free text — the owner responds by hand from the app.
     } else {
-      twiml.message(`Sorry, we didn't understand that. Reply C to confirm or X to cancel your ${when} appointment, or call ${COMPANY_PHONE}.`)
+      twiml.message(`We couldn't find your number in our system. Please call ${COMPANY_PHONE} for assistance.`)
     }
 
     res.type('text/xml').send(twiml.toString())

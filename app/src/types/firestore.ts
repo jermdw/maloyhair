@@ -61,3 +61,13 @@ export interface Settings {
   businessPhone: E164Phone
   businessHours: BusinessHours
 }
+
+export type MessageDirection = 'inbound' | 'outbound'
+
+export interface Message {
+  id: string
+  clientId: string
+  direction: MessageDirection
+  body: string
+  createdAt: Timestamp
+}

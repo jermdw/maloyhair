@@ -1,35 +1,34 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
   color-scheme: light;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --background: #F4EEE4;
+  --foreground: #2E1B0E;
+  --card: #FAF7F1;
+  --card-foreground: #2E1B0E;
+  --popover: #FAF7F1;
+  --popover-foreground: #2E1B0E;
+  --primary: #2E1B0E;
+  --primary-foreground: #F4EEE4;
+  --secondary: #EAE1D2;
+  --secondary-foreground: #2E1B0E;
+  --muted: #EDE6D9;
+  --muted-foreground: #6B5D4F;
+  --accent: #E6DCC8;
+  --accent-foreground: #2E1B0E;
+  --destructive: #B2452F;
+  --border: #DDD2BE;
+  --input: #DDD2BE;
+  --ring: #6B8C42;
+  --chart-1: #6B8C42;
+  --chart-2: #8FA85E;
+  --chart-3: #B8A97A;
+  --chart-4: #7A5A3A;
+  --chart-5: #2E1B0E;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -46,8 +45,9 @@ body {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'Lato', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --font-heading: 'Bodoni Moda', 'Didot', 'Bodoni MT', Georgia, serif;
+  --font-label: 'Barlow Condensed', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
