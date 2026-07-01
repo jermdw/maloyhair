@@ -32,7 +32,7 @@ functions/       Cloud Functions v2 (Node 20, TypeScript)
   src/secrets.ts    Firebase secret bindings (Twilio credentials)
   src/index.ts      Function exports
 
-firestore.rules         Locked to single owner email (alexmwarren13@gmail.com)
+firestore.rules         Locked to the owner via a custom auth claim (see below)
 firestore.indexes.json
 .firebaserc              Hosting targets: "site" -> maloyhair, "app" -> maloyhair-app
 firebase.json             public/ -> target site, app/dist -> target app (SPA rewrite)
@@ -43,7 +43,7 @@ Business contact info (address, phone) is hardcoded independently in `public/ind
 
 ## Single-owner security model
 
-This app has exactly one real user: Alex. Both `firestore.rules` and `functions/src/auth.ts` independently check `request.auth.token.email == 'alexmwarren13@gmail.com'`. This is enforced server-side via the verified Google OAuth token claim, not a client-side gate. **If her Google account ever changes, update the email in both places** — they don't share a single source of truth.
+This app has exactly one real user: Alex. Google Sign-In doesn't restrict *who* can authenticate — any Google account can complete sign-in — so access is gated by an `owner: true` custom claim on her Firebase Auth account, granted once via `functions/scripts/grant-owner-claim.mjs` (see [SETUP.md](SETUP.md)). Both `firestore.rules` and `functions/src/auth.ts` independently check `request.auth.token.owner == true`. This is enforced server-side via the signed auth token, not a client-side gate. **If her Google account ever changes, re-run the grant script for the new account** — the two checks don't share a single source of truth, so both must keep matching what the claim actually says.
 
 ## Deploys (GitHub Actions)
 

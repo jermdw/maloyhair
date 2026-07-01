@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
-import { auth, googleProvider, ALLOWED_EMAIL } from '@/lib/firebase'
+import { auth, googleProvider } from '@/lib/firebase'
 
 interface AuthContextValue {
   user: User | null
@@ -24,7 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn() {
     const result = await signInWithPopup(auth, googleProvider)
-    if (result.user.email !== ALLOWED_EMAIL) {
+    const idTokenResult = await result.user.getIdTokenResult()
+    if (idTokenResult.claims.owner !== true) {
       await signOut(auth)
       throw new Error('This app is restricted to a single account.')
     }

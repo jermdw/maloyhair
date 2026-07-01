@@ -15,6 +15,3 @@ export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
-
-/** Only this account may sign in — enforced again server-side by Firestore rules and Cloud Functions. */
-export const ALLOWED_EMAIL = 'alexmwarren13@gmail.com'
