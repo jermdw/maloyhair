@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateSettings, useSettings } from '@/hooks/useSettings'
+import { normalizePhone } from '@/lib/phone'
 import type { BusinessHours } from '@/types/firestore'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -40,13 +41,23 @@ export function SettingsPage() {
   }
 
   async function handleSave() {
+    if (!businessName.trim()) {
+      toast.error('Business name is required.')
+      return
+    }
+    const normalizedPhone = normalizePhone(businessPhone)
+    if (!normalizedPhone) {
+      toast.error('Enter a valid 10-digit US phone number.')
+      return
+    }
+
     setSaving(true)
     try {
       const businessHours: BusinessHours = {}
       rows.forEach((row, day) => {
         if (row.open) businessHours[day] = { start: row.start, end: row.end }
       })
-      await updateSettings({ businessName, businessPhone, businessHours })
+      await updateSettings({ businessName: businessName.trim(), businessPhone: normalizedPhone, businessHours })
       toast.success('Settings saved.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save settings.')

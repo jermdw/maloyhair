@@ -38,7 +38,8 @@ export const sendMessage = onCall(
         messagingServiceSid: twilioMessagingServiceSid.value(),
         body,
       })
-    } catch {
+    } catch (err) {
+      console.error('Failed to send Twilio SMS:', err)
       throw new HttpsError('internal', 'Failed to send the text message.')
     }
 

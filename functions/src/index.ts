@@ -186,9 +186,11 @@ export const handleInboundSms = onRequest(
         body,
         createdAt: FieldValue.serverTimestamp(),
       })
+      // No auto-reply for a known client's free text — the owner responds by hand from the app.
+    } else {
+      twiml.message(`We couldn't find your number in our system. Please call ${COMPANY_PHONE} for assistance.`)
     }
 
-    // No auto-reply for free text — the owner responds by hand from the app.
     res.type('text/xml').send(twiml.toString())
   },
 )

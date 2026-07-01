@@ -29,7 +29,7 @@ export function MessagesThread({ clientId }: MessagesThreadProps) {
 
   return (
     <div className="flex max-w-lg flex-col gap-4">
-      <div className="flex flex-col gap-2">
+      <div className="flex max-h-[400px] flex-col gap-2 overflow-y-auto pr-1">
         {loading && <p className="text-muted-foreground">Loading…</p>}
         {!loading && messages.length === 0 && (
           <p className="text-muted-foreground">No messages yet.</p>

@@ -11,7 +11,7 @@ import type { Appointment, AppointmentStatus } from '@/types/firestore'
 const localizer = dateFnsLocalizer({
   format,
   parse,
-  startOfWeek: () => startOfWeek(new Date(), { locale: enUS }),
+  startOfWeek: (date: Date) => startOfWeek(date, { locale: enUS }),
   getDay,
   locales: { 'en-US': enUS },
 })
