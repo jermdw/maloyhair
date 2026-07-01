@@ -17,7 +17,11 @@ In the [Firebase console](https://console.firebase.google.com/project/maloyhair/
 - Enable the **Google** sign-in provider.
 - Under Authentication → Settings → Authorized domains, add `maloyhair-app.web.app` (and your custom domain once mapped).
 
-Note: Firebase Auth itself doesn't let you restrict Google sign-in to one email at the provider level — that's enforced in this app by `firestore.rules` and `functions/src/auth.ts`, both checking for `alexmwarren13@gmail.com`. If she ever needs a different Google account, update the email in both places.
+Note: Firebase Auth itself doesn't let you restrict Google sign-in to one account at the provider level — anyone with a Google account can complete sign-in. Access is actually enforced by an `owner: true` custom claim, checked independently by `firestore.rules` and `functions/src/auth.ts`. After enabling the provider, grant the claim once:
+```
+node functions/scripts/grant-owner-claim.mjs <owner-email> --project=maloyhair
+```
+The claim takes effect on the owner's next sign-in or token refresh. If she ever switches Google accounts, re-run this script for the new account.
 
 ### 2. Get the web app config
 In the Firebase console → Project settings → Your apps → add a **Web app** (if one doesn't exist yet), copy the config values into `app/.env.local` (copy from `app/.env.example`).

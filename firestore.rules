@@ -3,13 +3,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // This app has exactly one user. Her identity is the verified Google
-    // account email on the auth token (set by Google's OAuth flow, not the
-    // client), so checking it here is a real server-side boundary, not just
-    // a UI gate.
+    // This app has exactly one user. Ownership is a custom claim
+    // (`owner: true`) set once on her Firebase Auth account via the Admin
+    // SDK (see functions/scripts/grant-owner-claim.mjs) — it lands on the
+    // auth token itself, so checking it here is a real server-side
+    // boundary, not just a UI gate. Google Sign-In alone does not restrict
+    // who can authenticate, so this claim check is required, not optional.
     function isOwner() {
       return request.auth != null &&
-        request.auth.token.email == 'alexmwarren13@gmail.com';
+        request.auth.token.owner == true;
     }
 
     match /clients/{clientId} {
