@@ -1,11 +1,9 @@
 # Maloy Hair
 
-Two-part Firebase project for Alex Warren's hair salon business (operates as "Maloy Hair" — Maloy is her maiden name, used only in the `alex@maloy.hair` email; she goes by Alex Warren).
+Two-part Firebase project for Alex Warren's hair salon business, branded "Maloy Hair."
 
 1. **Marketing site** (`/public`) — static HTML/CSS, live at https://maloy.hair
 2. **Booking app** (`/app`) — React/Vite/Tailwind/shadcn client + Cloud Functions backend, for Alex's own appointment management (single-user, not client-facing)
-
-Business location: Tilted Halo salon studio, 113 Lexington Circle, Peachtree City, GA 30269. Phone: (404) 394-1617.
 
 ## Why this project exists
 
@@ -41,6 +39,8 @@ firebase.json             public/ -> target site, app/dist -> target app (SPA re
 SETUP.md                  One-time manual setup steps (Firebase Auth, Twilio, secrets, Cloud Tasks)
 ```
 
+Business contact info (address, phone) is hardcoded independently in `public/index.html`, `privacy.html`, and `terms.html` — no shared template, so update all three if it changes.
+
 ## Single-owner security model
 
 This app has exactly one real user: Alex. Both `firestore.rules` and `functions/src/auth.ts` independently check `request.auth.token.email == 'alexmwarren13@gmail.com'`. This is enforced server-side via the verified Google OAuth token claim, not a client-side gate. **If her Google account ever changes, update the email in both places** — they don't share a single source of truth.
@@ -62,9 +62,30 @@ Both use secret `FIREBASE_SERVICE_ACCOUNT_MALOYHAIR`.
 - Fonts: Bodoni Moda (serif, brand name) + Barlow Condensed (small-caps labels) + Lato (body paragraphs, chosen for legibility over the original condensed font)
 - Mobile breakpoint at `max-width: 500px` in both `style.css` and `legal.css`
 
-## Local preview
+## Commands & local development
 
-`.claude/launch.json` defines a `site` config: `npx serve public` on port 3000 (autoPort enabled) — use Claude Code's preview tools against this for static-site changes, not the booking app (which needs `npm run dev` in `app/` plus Firebase emulators for a real backend).
+### Local preview
+| Target | Command | Notes |
+|--------|---------|-------|
+| Marketing site | `npx serve public` | Port 3000, wired into `.claude/launch.json` as the `site` config — use Claude Code preview tools against this |
+| Booking app | `npm run dev` (inside `app/`) | Needs Firebase emulators for a real backend |
+| Backend emulators | `firebase emulators:start` | Runs Firestore + Functions locally |
+
+### Build
+| Target | Command |
+|--------|---------|
+| Booking app | `npm run build` (inside `app/`) |
+| Functions | `npm run build` (inside `functions/`) |
+
+### Deploy
+| Target | Command |
+|--------|---------|
+| Everything | `firebase deploy --project maloyhair` |
+| Site only | `firebase deploy --only hosting:site --project maloyhair` |
+| App only | `firebase deploy --only hosting:app --project maloyhair` |
+| Functions only | `firebase deploy --only functions --project maloyhair` |
+
+CI (GitHub Actions) handles `public/**` → site and `app/**` → app automatically on push to `main`. Functions are deployed manually.
 
 ## Twilio A2P 10DLC context
 
