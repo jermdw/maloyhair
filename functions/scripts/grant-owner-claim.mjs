@@ -15,7 +15,7 @@
 import { initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 
-const email = process.argv[2]
+const email = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
 const projectArg = process.argv.find((arg) => arg.startsWith('--project='))
 const projectId = projectArg?.split('=')[1]
 
@@ -26,8 +26,17 @@ if (!email || !projectId) {
 
 initializeApp({ projectId })
 
-const auth = getAuth()
-const user = await auth.getUserByEmail(email)
-await auth.setCustomUserClaims(user.uid, { owner: true })
-
-console.log(`Granted owner claim to ${email} (uid: ${user.uid}) on project ${projectId}.`)
+try {
+  const auth = getAuth()
+  const user = await auth.getUserByEmail(email)
+  await auth.setCustomUserClaims(user.uid, { owner: true })
+  console.log(`Granted owner claim to ${email} (uid: ${user.uid}) on project ${projectId}.`)
+} catch (error) {
+  if (error?.code === 'auth/user-not-found') {
+    console.error(`Error: no Firebase Auth user found for "${email}".`)
+    console.error('Have the owner sign in once first (it will fail, but creates the Auth record), then re-run this script.')
+  } else {
+    console.error('Error granting owner claim:', error?.message ?? error)
+  }
+  process.exit(1)
+}
