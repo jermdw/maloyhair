@@ -1,11 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  type User,
+} from 'firebase/auth'
 import { auth, googleProvider } from '@/lib/firebase'
 
 interface AuthContextValue {
   user: User | null
   loading: boolean
   signIn: () => Promise<void>
+  signInDev: (email: string, password: string) => Promise<void>
   signOutUser: () => Promise<void>
 }
 
@@ -31,12 +38,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  /** Dev-only (emulator) sign-in path — never reachable in production, see LoginGate. */
+  async function signInDev(email: string, password: string) {
+    const result = await signInWithEmailAndPassword(auth, email, password)
+    const idTokenResult = await result.user.getIdTokenResult()
+    if (idTokenResult.claims.owner !== true) {
+      await signOut(auth)
+      throw new Error('This account is not authorized.')
+    }
+  }
+
   async function signOutUser() {
     await signOut(auth)
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOutUser }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signInDev, signOutUser }}>
       {children}
     </AuthContext.Provider>
   )

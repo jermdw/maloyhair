@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { connectFirestoreEmulator, initializeFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,5 +13,16 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+// Optional fields (Client.email/.notes, Appointment.notes, etc.) are passed
+// as `undefined` when absent, which Firestore rejects by default — this
+// treats `undefined` as "omit the field" instead, so callers don't need to
+// hand-build a field list.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true })
 export const googleProvider = new GoogleAuthProvider()
+
+// `npm run dev` (Vite's DEV mode) talks to local emulators instead of prod —
+// see CLAUDE.md's "Local dev auth" section for how to seed an owner user.
+if (import.meta.env.DEV) {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+}

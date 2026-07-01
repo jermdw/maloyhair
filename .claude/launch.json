@@ -7,6 +7,13 @@
       "runtimeArgs": ["serve", "public", "--no-clipboard"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "app", "--", "--port", "5190"],
+      "port": 5190,
+      "autoPort": true
     }
   ]
 }

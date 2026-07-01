@@ -1,13 +1,29 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
 import { LoginGate } from '@/components/LoginGate'
+import { Nav } from '@/components/Nav'
+import { CalendarPage } from '@/pages/CalendarPage'
+import { ClientsPage } from '@/pages/ClientsPage'
+import { ClientDetailPage } from '@/pages/ClientDetailPage'
+import { ServicesPage } from '@/pages/ServicesPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 function App() {
   return (
     <AuthProvider>
       <LoginGate>
-        <div className="p-8">
-          <h1 className="text-2xl font-semibold">Maloy Hair — Booking</h1>
-          <p className="text-muted-foreground">Calendar and client list go here.</p>
+        <div className="min-h-screen">
+          <Nav />
+          <main className="p-6">
+            <Routes>
+              <Route path="/" element={<Navigate to="/calendar" replace />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/clients/:clientId" element={<ClientDetailPage />} />
+              <Route path="/services" element={<ServicesPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </main>
         </div>
       </LoginGate>
     </AuthProvider>
