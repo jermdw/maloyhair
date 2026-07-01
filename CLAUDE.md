@@ -62,9 +62,30 @@ Both use secret `FIREBASE_SERVICE_ACCOUNT_MALOYHAIR`.
 - Fonts: Bodoni Moda (serif, brand name) + Barlow Condensed (small-caps labels) + Lato (body paragraphs, chosen for legibility over the original condensed font)
 - Mobile breakpoint at `max-width: 500px` in both `style.css` and `legal.css`
 
-## Local preview
+## Commands & local development
 
-`.claude/launch.json` defines a `site` config: `npx serve public` on port 3000 (autoPort enabled) — use Claude Code's preview tools against this for static-site changes, not the booking app (which needs `npm run dev` in `app/` plus Firebase emulators for a real backend).
+### Local preview
+| Target | Command | Notes |
+|--------|---------|-------|
+| Marketing site | `npx serve public` | Port 3000, wired into `.claude/launch.json` as the `site` config — use Claude Code preview tools against this |
+| Booking app | `npm run dev` (inside `app/`) | Needs Firebase emulators for a real backend |
+| Backend emulators | `firebase emulators:start` | Runs Firestore + Functions locally |
+
+### Build
+| Target | Command |
+|--------|---------|
+| Booking app | `npm run build` (inside `app/`) |
+| Functions | `npm run build` (inside `functions/`) |
+
+### Deploy
+| Target | Command |
+|--------|---------|
+| Everything | `firebase deploy --project maloyhair` |
+| Site only | `firebase deploy --only hosting:site --project maloyhair` |
+| App only | `firebase deploy --only hosting:app --project maloyhair` |
+| Functions only | `firebase deploy --only functions --project maloyhair` |
+
+CI (GitHub Actions) handles `public/**` → site and `app/**` → app automatically on push to `main`. Functions are deployed manually.
 
 ## Twilio A2P 10DLC context
 
