@@ -15,9 +15,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ServiceDialog } from '@/components/ServiceDialog'
 import { deleteService, useServices } from '@/hooks/useServices'
+import { formatCurrency } from '@/lib/utils'
 import type { Service } from '@/types/firestore'
-
-const currencyFormatter = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
 
 export function ServicesPage() {
   const { services } = useServices()
@@ -61,7 +60,7 @@ export function ServicesPage() {
             <TableRow key={service.id}>
               <TableCell>{service.name}</TableCell>
               <TableCell>{service.durationMinutes} min</TableCell>
-              <TableCell>{currencyFormatter.format(service.price)}</TableCell>
+              <TableCell>{formatCurrency(service.price)}</TableCell>
               <TableCell className="text-right">
                 <Button
                   variant="ghost"

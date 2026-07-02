@@ -47,6 +47,7 @@ export const sendMessage = onCall(
       clientId,
       direction: 'outbound',
       body,
+      read: true,
       createdAt: FieldValue.serverTimestamp(),
     })
 

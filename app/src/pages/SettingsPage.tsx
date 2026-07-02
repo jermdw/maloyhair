@@ -26,6 +26,7 @@ export function SettingsPage() {
   const { settings } = useSettings()
   const [businessName, setBusinessName] = useState('')
   const [businessPhone, setBusinessPhone] = useState('')
+  const [stripeReaderId, setStripeReaderId] = useState('')
   const [rows, setRows] = useState<DayRow[]>(toRows(undefined))
   const [saving, setSaving] = useState(false)
 
@@ -33,6 +34,7 @@ export function SettingsPage() {
     if (!settings) return
     setBusinessName(settings.businessName)
     setBusinessPhone(settings.businessPhone)
+    setStripeReaderId(settings.stripeReaderId ?? '')
     setRows(toRows(settings.businessHours))
   }, [settings])
 
@@ -57,7 +59,12 @@ export function SettingsPage() {
       rows.forEach((row, day) => {
         if (row.open) businessHours[day] = { start: row.start, end: row.end }
       })
-      await updateSettings({ businessName: businessName.trim(), businessPhone: normalizedPhone, businessHours })
+      await updateSettings({
+        businessName: businessName.trim(),
+        businessPhone: normalizedPhone,
+        businessHours,
+        stripeReaderId: stripeReaderId.trim() || undefined,
+      })
       toast.success('Settings saved.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save settings.')
@@ -78,6 +85,17 @@ export function SettingsPage() {
         <div className="flex flex-col gap-1.5">
           <Label>Business phone</Label>
           <Input value={businessPhone} onChange={(e) => setBusinessPhone(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Stripe reader ID</Label>
+          <Input
+            placeholder="tmr_..."
+            value={stripeReaderId}
+            onChange={(e) => setStripeReaderId(e.target.value)}
+          />
+          <p className="text-sm text-muted-foreground">
+            From Stripe Dashboard → Terminal → Readers, after registering the reader (see SETUP.md).
+          </p>
         </div>
 
         <div className="mt-2 flex flex-col gap-2">

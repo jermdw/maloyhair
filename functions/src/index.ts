@@ -12,6 +12,7 @@ import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid } from './
 import { findClientIdByPhone, findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
 
 export { sendMessage } from './messages.js'
+export { createCheckoutCharge, stripeWebhook } from './payments.js'
 
 initializeApp()
 setGlobalOptions({ region: 'us-east1' })
@@ -184,6 +185,7 @@ export const handleInboundSms = onRequest(
         clientId,
         direction: 'inbound',
         body,
+        read: false,
         createdAt: FieldValue.serverTimestamp(),
       })
       // No auto-reply for a known client's free text — the owner responds by hand from the app.

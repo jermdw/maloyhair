@@ -36,6 +36,17 @@ export interface ReminderState {
   taskName: string | null
 }
 
+export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed'
+
+/** Tracks a Stripe Terminal checkout charge, separate from the appointment's scheduling `status`. */
+export interface AppointmentPayment {
+  status: PaymentStatus
+  /** Cents, snapshotted from the service price at charge time. */
+  amount: number
+  paymentIntentId?: string
+  updatedAt: Timestamp
+}
+
 export interface Appointment {
   id: string
   clientId: string
@@ -48,6 +59,7 @@ export interface Appointment {
     h48: ReminderState
     h2: ReminderState
   }
+  payment?: AppointmentPayment
   createdAt: Timestamp
 }
 
@@ -60,6 +72,8 @@ export interface Settings {
   businessName: string
   businessPhone: E164Phone
   businessHours: BusinessHours
+  /** Stripe Terminal reader ID (tmr_...), registered one-time via the Stripe Dashboard. */
+  stripeReaderId?: string
 }
 
 export type MessageDirection = 'inbound' | 'outbound'
@@ -69,5 +83,7 @@ export interface Message {
   clientId: string
   direction: MessageDirection
   body: string
+  /** Whether the owner has seen this message. Outbound messages are always read (she sent it). */
+  read: boolean
   createdAt: Timestamp
 }

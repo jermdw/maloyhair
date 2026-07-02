@@ -5,6 +5,7 @@ import { Nav } from '@/components/Nav'
 import { CalendarPage } from '@/pages/CalendarPage'
 import { ClientsPage } from '@/pages/ClientsPage'
 import { ClientDetailPage } from '@/pages/ClientDetailPage'
+import { MessagesPage } from '@/pages/MessagesPage'
 import { ServicesPage } from '@/pages/ServicesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
@@ -20,6 +21,7 @@ function App() {
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/clients/:clientId" element={<ClientDetailPage />} />
+              <Route path="/messages" element={<MessagesPage />} />
               <Route path="/services" element={<ServicesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
