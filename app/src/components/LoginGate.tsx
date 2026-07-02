@@ -31,13 +31,28 @@ function DevSignInForm() {
 
 export function LoginGate({ children }: { children: React.ReactNode }) {
   const { user, loading, signIn } = useAuth()
+  const [isSigningIn, setIsSigningIn] = useState(false)
+
+  async function handleSignIn() {
+    if (isSigningIn) return
+    setIsSigningIn(true)
+    try {
+      await signIn()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Sign-in failed.')
+    } finally {
+      setIsSigningIn(false)
+    }
+  }
 
   if (loading) return null
 
   if (!user) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
-        <Button onClick={() => signIn()}>Sign in with Google</Button>
+        <Button onClick={handleSignIn} disabled={isSigningIn}>
+          {isSigningIn ? 'Signing in…' : 'Sign in with Google'}
+        </Button>
         {import.meta.env.DEV && <DevSignInForm />}
       </div>
     )
