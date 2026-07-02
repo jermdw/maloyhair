@@ -30,7 +30,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { createAppointment, deleteAppointment, updateAppointment } from '@/hooks/useAppointments'
-import type { Appointment, AppointmentStatus, Client, Service } from '@/types/firestore'
+import { createCheckoutCharge } from '@/hooks/usePayments'
+import type { Appointment, AppointmentPayment, AppointmentStatus, Client, Service } from '@/types/firestore'
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['booked', 'confirmed', 'cancelled', 'completed', 'no_show']
 
@@ -38,6 +39,10 @@ interface AppointmentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   appointment: Appointment | null
+  /** The same appointment's payment field, re-derived fresh from the live appointments list on
+   *  every render (unlike `appointment`, which is snapshotted once when the dialog opens) — so
+   *  the checkout UI updates as soon as the Stripe webhook reports an outcome. */
+  livePayment?: AppointmentPayment
   defaultStart?: Date
   clients: Client[]
   services: Service[]
@@ -55,11 +60,13 @@ export function AppointmentDialog({
   open,
   onOpenChange,
   appointment,
+  livePayment,
   defaultStart,
   clients,
   services,
 }: AppointmentDialogProps) {
   const isEditing = appointment != null
+  const payment = livePayment ?? appointment?.payment
 
   const [clientId, setClientId] = useState('')
   const [serviceId, setServiceId] = useState('')
@@ -68,6 +75,7 @@ export function AppointmentDialog({
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState<AppointmentStatus>('booked')
   const [saving, setSaving] = useState(false)
+  const [charging, setCharging] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -140,6 +148,19 @@ export function AppointmentDialog({
       onOpenChange(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete appointment.')
+    }
+  }
+
+  async function handleCharge() {
+    if (!appointment) return
+    setCharging(true)
+    try {
+      await createCheckoutCharge(appointment.id)
+      toast.success('Charge sent to the reader.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start the charge.')
+    } finally {
+      setCharging(false)
     }
   }
 
@@ -240,6 +261,22 @@ export function AppointmentDialog({
             <Label>Notes</Label>
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+
+          {isEditing && selectedService && (
+            <div className="flex items-center justify-between rounded-lg border border-input px-3 py-2">
+              <span className="text-sm">
+                {payment?.status === 'paid' && `Paid $${(payment.amount / 100).toFixed(2)}`}
+                {payment?.status === 'processing' && 'Waiting for card on reader…'}
+                {payment?.status === 'failed' && 'Payment failed'}
+                {(!payment || payment.status === 'unpaid') && 'Not charged yet'}
+              </span>
+              {payment?.status !== 'paid' && payment?.status !== 'processing' && (
+                <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
+                  {payment?.status === 'failed' ? 'Retry charge' : `Charge $${selectedService.price.toFixed(2)}`}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>

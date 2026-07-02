@@ -57,10 +57,30 @@ In the [Twilio console](https://console.twilio.com/us1/develop/sms/services) →
 - Set "A message comes in" to **Webhook**, pointed at the deployed `handleInboundSms` URL, HTTP POST.
 - Enable **Advanced Opt-Out** (under the Messaging Service's compliance/opt-out settings) so Twilio auto-handles STOP/START/HELP keywords before they reach our function — no code needed for that path.
 
-### 7. Deploy everything
+### 7. Stripe Terminal checkout
+Checkout uses a WiFi-connected Stripe "smart reader" (BBPOS WisePOS E or Stripe Reader S700) via the
+[server-driven Terminal integration](https://docs.stripe.com/terminal/payments/setup-integration?terminal-sdk-platform=server-driven) —
+no client-side Terminal SDK, no ConnectionToken. **Not** a Bluetooth mobile reader (BBPOS Chipper 2X BT /
+WisePad 3 / Stripe M2) — those only pair with a native iOS/Android app, which this project doesn't have.
+
+1. Order/exchange for a smart reader at [dashboard.stripe.com/terminal/shop](https://dashboard.stripe.com/terminal/shop).
+2. In the Stripe Dashboard → Terminal → Locations, create a Location for the salon.
+3. Power on the reader, connect it to the salon WiFi, then register it to that Location: Dashboard → Terminal → Readers → Register, using the pairing code shown on the reader's screen. Copy the resulting reader ID (`tmr_...`).
+4. Paste that reader ID into the app's Settings page ("Stripe reader ID" field).
+5. Create a **restricted API key** (not the full secret key) at Dashboard → Developers → API keys → Create restricted key, scoped to PaymentIntents (write) and Terminal (write) only. Set it as a secret:
+```
+firebase functions:secrets:set STRIPE_SECRET_KEY --project=maloyhair
+```
+6. Deploy functions (see step 5 above) so `stripeWebhook` gets a live URL, then in Stripe Dashboard → Developers → Webhooks, add an endpoint pointed at that URL, subscribed to `payment_intent.succeeded`, `payment_intent.payment_failed`, and `terminal.reader.action_failed`. Copy the webhook's signing secret:
+```
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET --project=maloyhair
+```
+7. Redeploy functions once more so both secrets are picked up.
+
+### 8. Deploy everything
 ```
 firebase deploy --project=maloyhair
 ```
 
-### 8. (Optional) Custom domain for the app
+### 9. (Optional) Custom domain for the app
 In Hosting → `maloyhair-app` site → Add custom domain (e.g. `app.maloy.hair`), separate from the marketing site's domain.

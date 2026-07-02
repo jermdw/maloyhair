@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ export function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>()
   const { clients } = useClients()
   const client = clients.find((c) => c.id === clientId)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') === 'messages' ? 'messages' : 'details'
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -52,7 +54,10 @@ export function ClientDetailPage() {
       </Link>
       <h1 className="mb-4 mt-1 font-heading text-2xl">{client.name}</h1>
 
-      <Tabs defaultValue="details">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setSearchParams(value === 'messages' ? { tab: 'messages' } : {}, { replace: true })}
+      >
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>

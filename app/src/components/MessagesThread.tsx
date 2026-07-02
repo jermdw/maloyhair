@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { sendMessage, useMessages } from '@/hooks/useMessages'
+import { markThreadRead, sendMessage, useMessages } from '@/hooks/useMessages'
 import { cn } from '@/lib/utils'
 
 interface MessagesThreadProps {
@@ -13,6 +13,10 @@ export function MessagesThread({ clientId }: MessagesThreadProps) {
   const { messages, loading } = useMessages(clientId)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (!loading) markThreadRead(messages)
+  }, [loading, messages])
 
   async function handleSend() {
     if (!draft.trim()) return

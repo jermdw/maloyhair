@@ -99,6 +99,7 @@ export function CalendarPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         appointment={editingAppointment}
+        livePayment={appointments.find((a) => a.id === editingAppointment?.id)?.payment}
         defaultStart={prefillStart}
         clients={clients}
         services={services}

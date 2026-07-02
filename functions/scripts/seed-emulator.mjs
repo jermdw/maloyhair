@@ -112,8 +112,8 @@ async function seedSettings() {
 
 async function seedMessages(clientIds) {
   const messages = [
-    { clientId: clientIds[0], direction: 'inbound', body: 'Can we move to 3pm instead?', createdAt: Timestamp.now() },
-    { clientId: clientIds[0], direction: 'outbound', body: 'Sure, see you at 3pm!', createdAt: Timestamp.now() },
+    { clientId: clientIds[0], direction: 'inbound', body: 'Can we move to 3pm instead?', read: false, createdAt: Timestamp.now() },
+    { clientId: clientIds[0], direction: 'outbound', body: 'Sure, see you at 3pm!', read: true, createdAt: Timestamp.now() },
   ]
   for (const message of messages) {
     await db.collection('messages').add(message)
