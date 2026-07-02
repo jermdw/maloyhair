@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/select'
 import { createAppointment, deleteAppointment, updateAppointment } from '@/hooks/useAppointments'
 import { createCheckoutCharge } from '@/hooks/usePayments'
-import type { Appointment, AppointmentPayment, AppointmentStatus, Client, Service } from '@/types/firestore'
+import { formatCurrency } from '@/lib/utils'
+import type { Appointment, AppointmentStatus, Client, Service } from '@/types/firestore'
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['booked', 'confirmed', 'cancelled', 'completed', 'no_show']
 
@@ -39,10 +40,12 @@ interface AppointmentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   appointment: Appointment | null
-  /** The same appointment's payment field, re-derived fresh from the live appointments list on
-   *  every render (unlike `appointment`, which is snapshotted once when the dialog opens) — so
-   *  the checkout UI updates as soon as the Stripe webhook reports an outcome. */
-  livePayment?: AppointmentPayment
+  /** The same appointment, re-derived fresh from the live appointments list on every render
+   *  (unlike `appointment`, which is snapshotted once when the dialog opens) — so the checkout
+   *  UI updates as soon as the Stripe webhook reports an outcome, and a status change made
+   *  elsewhere (e.g. a client texting "X" to cancel) can be surfaced without clobbering
+   *  whatever the owner may be mid-editing in the form. */
+  liveAppointment?: Appointment | null
   defaultStart?: Date
   clients: Client[]
   services: Service[]
@@ -60,13 +63,15 @@ export function AppointmentDialog({
   open,
   onOpenChange,
   appointment,
-  livePayment,
+  liveAppointment,
   defaultStart,
   clients,
   services,
 }: AppointmentDialogProps) {
   const isEditing = appointment != null
-  const payment = livePayment ?? appointment?.payment
+  const payment = liveAppointment?.payment ?? appointment?.payment
+  const liveStatusChanged =
+    isEditing && liveAppointment != null && appointment != null && liveAppointment.status !== appointment.status
 
   const [clientId, setClientId] = useState('')
   const [serviceId, setServiceId] = useState('')
@@ -100,6 +105,7 @@ export function AppointmentDialog({
   }, [open, appointment, defaultStart])
 
   const selectedService = services.find((s) => s.id === serviceId)
+  const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
   const startTime = dateValue && timeValue ? new Date(`${dateValue}T${timeValue}`) : null
   const endTime =
     startTime && selectedService ? new Date(startTime.getTime() + selectedService.durationMinutes * 60_000) : null
@@ -254,6 +260,11 @@ export function AppointmentDialog({
                   ))}
                 </SelectContent>
               </Select>
+              {liveStatusChanged && (
+                <p className="text-sm text-destructive">
+                  Status changed to "{liveAppointment!.status.replace('_', ' ')}" elsewhere — reopen to pick it up.
+                </p>
+              )}
             </div>
           )}
 
@@ -263,17 +274,22 @@ export function AppointmentDialog({
           </div>
 
           {isEditing && selectedService && (
-            <div className="flex items-center justify-between rounded-lg border border-input px-3 py-2">
-              <span className="text-sm">
-                {payment?.status === 'paid' && `Paid $${(payment.amount / 100).toFixed(2)}`}
-                {payment?.status === 'processing' && 'Waiting for card on reader…'}
-                {payment?.status === 'failed' && 'Payment failed'}
-                {(!payment || payment.status === 'unpaid') && 'Not charged yet'}
-              </span>
-              {payment?.status !== 'paid' && payment?.status !== 'processing' && (
-                <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
-                  {payment?.status === 'failed' ? 'Retry charge' : `Charge $${selectedService.price.toFixed(2)}`}
-                </Button>
+            <div className="flex flex-col gap-1.5 rounded-lg border border-input px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">
+                  {payment?.status === 'paid' && `Paid ${formatCurrency(payment.amount / 100)}`}
+                  {payment?.status === 'processing' && 'Waiting for card on reader…'}
+                  {payment?.status === 'failed' && 'Payment failed'}
+                  {(!payment || payment.status === 'unpaid') && 'Not charged yet'}
+                </span>
+                {payment?.status !== 'paid' && payment?.status !== 'processing' && !serviceChanged && (
+                  <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
+                    {payment?.status === 'failed' ? 'Retry charge' : `Charge ${formatCurrency(selectedService.price)}`}
+                  </Button>
+                )}
+              </div>
+              {serviceChanged && (
+                <p className="text-sm text-muted-foreground">Save your change to the service before charging.</p>
               )}
             </div>
           )}

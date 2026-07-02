@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -8,19 +9,15 @@ export function MessagesPage() {
   const { conversations, loading } = useConversations()
   const { clients } = useClients()
 
-  const clientsById = new Map(clients.map((c) => [c.id, c]))
-
-  const sorted = [...conversations].sort(
-    (a, b) => b.lastMessage.createdAt.toMillis() - a.lastMessage.createdAt.toMillis(),
-  )
+  const clientsById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients])
 
   return (
     <div>
       <h1 className="mb-4 font-heading text-2xl">Messages</h1>
 
-      {!loading && sorted.length === 0 && <p className="text-muted-foreground">No conversations yet.</p>}
+      {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations yet.</p>}
 
-      {sorted.length > 0 && (
+      {conversations.length > 0 && (
         <Table>
           <TableHeader>
             <TableRow>
@@ -30,7 +27,7 @@ export function MessagesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((conversation) => {
+            {conversations.map((conversation) => {
               const client = clientsById.get(conversation.clientId)
               return (
                 <TableRow key={conversation.clientId}>
