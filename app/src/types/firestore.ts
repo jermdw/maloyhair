@@ -38,13 +38,15 @@ export interface ReminderState {
 
 export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed' | 'cancelled'
 
-/** Tracks a Stripe Terminal checkout charge, separate from the appointment's scheduling `status`. */
+/** Tracks a checkout charge, separate from the appointment's scheduling `status`. */
 export interface AppointmentPayment {
   status: PaymentStatus
   /** Cents. Total amount charged, including any tip the client added on the reader. */
   amount: number
   /** Cents. Portion of `amount` that was a tip, reported by Stripe once paid. */
   tipAmount?: number
+  /** Absent (or 'card') means a Stripe Terminal charge; 'cash' bypasses the reader entirely. */
+  method?: 'card' | 'cash'
   paymentIntentId?: string
   updatedAt: Timestamp
 }

@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { createAppointment, deleteAppointment, updateAppointment, useAppointments } from '@/hooks/useAppointments'
-import { cancelCheckoutCharge, createCheckoutCharge } from '@/hooks/usePayments'
+import { cancelCheckoutCharge, createCheckoutCharge, recordCashPayment } from '@/hooks/usePayments'
 import { useSettings } from '@/hooks/useSettings'
 import { useClientServiceHistory } from '@/hooks/useServiceHistory'
 import { formatCurrency } from '@/lib/utils'
@@ -53,6 +53,8 @@ interface AppointmentDialogProps {
    *  whatever the owner may be mid-editing in the form. */
   liveAppointment?: Appointment | null
   defaultStart?: Date
+  /** Pre-selects a client when creating (e.g. booking from that client's profile page). */
+  defaultClientId?: string
   clients: Client[]
   services: Service[]
 }
@@ -81,6 +83,7 @@ export function AppointmentDialog({
   appointment,
   liveAppointment,
   defaultStart,
+  defaultClientId,
   clients,
   services,
 }: AppointmentDialogProps) {
@@ -121,7 +124,7 @@ export function AppointmentDialog({
       setStatus(appointment.status)
     } else {
       const start = defaultStart ?? new Date()
-      setClientId('')
+      setClientId(defaultClientId ?? '')
       setServiceId('')
       setDateValue(toDateInputValue(start))
       setTimeValue(isMidnight(start) ? workdayStart(start, settings) : toTimeInputValue(start))
@@ -133,7 +136,7 @@ export function AppointmentDialog({
     setRepeatMode('count')
     setRepeatCount('6')
     setRepeatUntilDate('')
-  }, [open, appointment, defaultStart, settings])
+  }, [open, appointment, defaultStart, defaultClientId, settings])
 
   const selectedService = services.find((s) => s.id === serviceId)
   const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
@@ -265,19 +268,43 @@ export function AppointmentDialog({
     }
   }
 
+  function parseChargeAmountCents(input: string): number | null {
+    const dollars = parseFloat(input)
+    if (!Number.isFinite(dollars) || dollars <= 0) return null
+    return Math.round(dollars * 100)
+  }
+
   async function handleCharge() {
     if (!appointment) return
-    const amountDollars = parseFloat(chargeAmount)
-    if (!Number.isFinite(amountDollars) || amountDollars <= 0) {
+    const amountCents = parseChargeAmountCents(chargeAmount)
+    if (amountCents == null) {
       toast.error('Enter a valid charge amount.')
       return
     }
     setCharging(true)
     try {
-      await createCheckoutCharge(appointment.id, Math.round(amountDollars * 100))
+      await createCheckoutCharge(appointment.id, amountCents)
       toast.success('Charge sent to the reader.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start the charge.')
+    } finally {
+      setCharging(false)
+    }
+  }
+
+  async function handleCashPayment() {
+    if (!appointment) return
+    const amountCents = parseChargeAmountCents(chargeAmount)
+    if (amountCents == null) {
+      toast.error('Enter a valid charge amount.')
+      return
+    }
+    setCharging(true)
+    try {
+      await recordCashPayment(appointment.id, amountCents)
+      toast.success('Marked as paid (cash).')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to record the cash payment.')
     } finally {
       setCharging(false)
     }
@@ -493,7 +520,7 @@ export function AppointmentDialog({
               <div className="flex items-center justify-between">
                 <span className="text-sm">
                   {payment?.status === 'paid' &&
-                    `Paid ${formatCurrency(payment.amount / 100)}${
+                    `Paid ${formatCurrency(payment.amount / 100)}${payment.method === 'cash' ? ' (cash)' : ''}${
                       payment.tipAmount ? ` (incl. ${formatCurrency(payment.tipAmount / 100)} tip)` : ''
                     }`}
                   {payment?.status === 'processing' && 'Waiting for card on reader…'}
@@ -520,6 +547,9 @@ export function AppointmentDialog({
                   />
                   <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
                     {payment?.status === 'failed' || payment?.status === 'cancelled' ? 'Retry charge' : 'Charge'}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleCashPayment} disabled={charging}>
+                    Cash
                   </Button>
                 </div>
               )}

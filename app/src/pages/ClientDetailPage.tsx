@@ -12,6 +12,7 @@ import { useAppointments } from '@/hooks/useAppointments'
 import { useServices } from '@/hooks/useServices'
 import { useClientServiceHistory } from '@/hooks/useServiceHistory'
 import { MessagesThread } from '@/components/MessagesThread'
+import { AppointmentDialog } from '@/components/AppointmentDialog'
 import { formatCurrency } from '@/lib/utils'
 
 interface HistoryRow {
@@ -20,6 +21,7 @@ interface HistoryRow {
   serviceName: string
   amount: number
   tipAmount?: number
+  method?: 'card' | 'cash'
   imported: boolean
 }
 
@@ -44,6 +46,7 @@ export function ClientDetailPage() {
         serviceName: servicesById.get(a.serviceId)?.name ?? 'Unknown service',
         amount: a.payment!.amount,
         tipAmount: a.payment!.tipAmount,
+        method: a.payment!.method,
         imported: false,
       }))
     const imported: HistoryRow[] = importedHistory.map((entry) => ({
@@ -61,6 +64,7 @@ export function ClientDetailPage() {
   const [email, setEmail] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [bookingOpen, setBookingOpen] = useState(false)
 
   useEffect(() => {
     if (!client) return
@@ -92,7 +96,12 @@ export function ClientDetailPage() {
       <Link to="/clients" className="text-sm text-muted-foreground hover:underline">
         ← Back to clients
       </Link>
-      <h1 className="mb-4 mt-1 font-heading text-2xl">{client.name}</h1>
+      <div className="mb-4 mt-1 flex items-center justify-between">
+        <h1 className="font-heading text-2xl">{client.name}</h1>
+        <Button size="sm" onClick={() => setBookingOpen(true)}>
+          New appointment
+        </Button>
+      </div>
 
       <Tabs
         value={activeTab}
@@ -143,7 +152,10 @@ export function ClientDetailPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm">{formatCurrency(row.amount / 100)}</p>
+                    <p className="text-sm">
+                      {formatCurrency(row.amount / 100)}
+                      {row.method === 'cash' && ' (cash)'}
+                    </p>
                     {!!row.tipAmount && (
                       <p className="text-sm text-muted-foreground">
                         incl. {formatCurrency(row.tipAmount / 100)} tip
@@ -160,6 +172,15 @@ export function ClientDetailPage() {
           <MessagesThread clientId={client.id} />
         </TabsContent>
       </Tabs>
+
+      <AppointmentDialog
+        open={bookingOpen}
+        onOpenChange={setBookingOpen}
+        appointment={null}
+        defaultClientId={client.id}
+        clients={clients}
+        services={services}
+      />
     </div>
   )
 }
