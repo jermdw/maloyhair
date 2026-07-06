@@ -6,6 +6,39 @@ import { stripeSecretKey, stripeWebhookSecret } from './secrets.js'
 
 interface CreateCheckoutChargeRequest {
   appointmentId: string
+  /** Cents. Overrides the service's list price — lets the stylist adjust the total (add-ons,
+   *  discounts) before it goes to the reader. Defaults to the service price when omitted. */
+  amount?: number
+}
+
+interface CancelCheckoutChargeRequest {
+  appointmentId: string
+}
+
+/**
+ * Cancels whatever the reader is currently doing. No-op if no reader is configured, since
+ * nothing could have been pushed to it in that case. When `expectedPaymentIntentId` is given,
+ * only cancels if the reader's in-flight action is actually for that PaymentIntent — this
+ * guards against a stale `processing` appointment (e.g. one whose webhook was missed) from
+ * cancelling a *different*, currently-live charge the reader has since moved on to.
+ */
+export async function cancelReaderAction(
+  db: FirebaseFirestore.Firestore,
+  expectedPaymentIntentId?: string,
+): Promise<void> {
+  const settingsSnap = await db.collection('settings').doc('main').get()
+  const readerId = settingsSnap.data()?.stripeReaderId
+  if (!readerId) return
+
+  const stripe = new Stripe(stripeSecretKey.value())
+
+  if (expectedPaymentIntentId) {
+    const reader = await stripe.terminal.readers.retrieve(readerId)
+    const currentPaymentIntentId = 'action' in reader ? reader.action?.process_payment_intent?.payment_intent : undefined
+    if (currentPaymentIntentId !== expectedPaymentIntentId) return
+  }
+
+  await stripe.terminal.readers.cancelAction(readerId)
 }
 
 /**
@@ -21,9 +54,12 @@ export const createCheckoutCharge = onCall(
   async (request) => {
     requireOwner(request)
 
-    const { appointmentId } = (request.data ?? {}) as Partial<CreateCheckoutChargeRequest>
+    const { appointmentId, amount: amountOverride } = (request.data ?? {}) as Partial<CreateCheckoutChargeRequest>
     if (!appointmentId) {
       throw new HttpsError('invalid-argument', 'appointmentId is required.')
+    }
+    if (amountOverride !== undefined && (!Number.isInteger(amountOverride) || amountOverride <= 0)) {
+      throw new HttpsError('invalid-argument', 'amount must be a positive integer number of cents.')
     }
 
     const db = getFirestore()
@@ -66,7 +102,7 @@ export const createCheckoutCharge = onCall(
         throw new HttpsError('failed-precondition', 'No Stripe reader configured — set one on the Settings page.')
       }
 
-      const amount = Math.round(service.price * 100)
+      const amount = amountOverride ?? Math.round(service.price * 100)
       const client = clientSnap.data()
 
       const stripe = new Stripe(stripeSecretKey.value())
@@ -101,6 +137,64 @@ export const createCheckoutCharge = onCall(
       console.error('Failed to create Stripe Terminal charge:', err)
       throw new HttpsError('internal', 'Failed to reach the card reader. Check that it is powered on and online.')
     }
+  },
+)
+
+/**
+ * Cancels a charge that's currently waiting on the reader (e.g. the stylist backed out, or
+ * the reader appears stuck). Tells the reader to stop the current action, then explicitly
+ * cancels the underlying PaymentIntent too — cancelling the reader action alone isn't
+ * guaranteed to also cancel the PaymentIntent — and marks the appointment accordingly.
+ */
+export const cancelCheckoutCharge = onCall(
+  { region: 'us-east1', secrets: [stripeSecretKey] },
+  async (request) => {
+    requireOwner(request)
+
+    const { appointmentId } = (request.data ?? {}) as Partial<CancelCheckoutChargeRequest>
+    if (!appointmentId) {
+      throw new HttpsError('invalid-argument', 'appointmentId is required.')
+    }
+
+    const db = getFirestore()
+    const apptRef = db.collection('appointments').doc(appointmentId)
+
+    let paymentIntentId: string | undefined
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(apptRef)
+      const appt = snap.data()
+      if (!appt) {
+        throw new HttpsError('not-found', 'Appointment not found.')
+      }
+      if (appt.payment?.status !== 'processing') {
+        throw new HttpsError('failed-precondition', 'No charge is currently in progress for this appointment.')
+      }
+      paymentIntentId = appt.payment?.paymentIntentId
+      tx.update(apptRef, {
+        'payment.status': 'cancelled',
+        'payment.updatedAt': FieldValue.serverTimestamp(),
+      })
+    })
+
+    try {
+      await cancelReaderAction(db, paymentIntentId)
+      if (paymentIntentId) {
+        const stripe = new Stripe(stripeSecretKey.value())
+        await stripe.paymentIntents.cancel(paymentIntentId).catch((err) => {
+          // Already succeeded/canceled/etc — nothing more to do; the webhook (if it fires)
+          // will reconcile the appointment's payment status to whatever actually happened.
+          console.error('PaymentIntent cancel no-op:', err)
+        })
+      }
+    } catch (err) {
+      console.error('Failed to cancel reader action:', err)
+      throw new HttpsError(
+        'internal',
+        'Marked as cancelled, but the reader may still be waiting — check it and power-cycle if needed.',
+      )
+    }
+
+    return { success: true }
   },
 )
 

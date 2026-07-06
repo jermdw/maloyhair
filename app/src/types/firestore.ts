@@ -36,7 +36,7 @@ export interface ReminderState {
   taskName: string | null
 }
 
-export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed'
+export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed' | 'cancelled'
 
 /** Tracks a Stripe Terminal checkout charge, separate from the appointment's scheduling `status`. */
 export interface AppointmentPayment {

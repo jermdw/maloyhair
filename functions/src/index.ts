@@ -8,11 +8,12 @@ import {
 import { onRequest } from 'firebase-functions/v2/https'
 import { setGlobalOptions } from 'firebase-functions/v2'
 import { scheduleReminder, cancelReminder } from './reminders.js'
-import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid } from './secrets.js'
+import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid, stripeSecretKey } from './secrets.js'
 import { findClientIdByPhone, findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
+import { cancelReaderAction } from './payments.js'
 
 export { sendMessage } from './messages.js'
-export { createCheckoutCharge, stripeWebhook } from './payments.js'
+export { createCheckoutCharge, cancelCheckoutCharge, stripeWebhook } from './payments.js'
 
 initializeApp()
 setGlobalOptions({ region: 'us-east1' })
@@ -75,15 +76,28 @@ export const onAppointmentUpdated = onDocumentUpdated('appointments/{appointment
   await event.data!.after.ref.update({ reminders: { h48, h2 } })
 })
 
-export const onAppointmentDeleted = onDocumentDeleted('appointments/{appointmentId}', async (event) => {
-  const appointment = event.data?.data()
-  if (!appointment) return
+export const onAppointmentDeleted = onDocumentDeleted(
+  { document: 'appointments/{appointmentId}', secrets: [stripeSecretKey] },
+  async (event) => {
+    const appointment = event.data?.data()
+    if (!appointment) return
 
-  await Promise.all([
-    cancelReminder(appointment.reminders?.h48),
-    cancelReminder(appointment.reminders?.h2),
-  ])
-})
+    await Promise.all([
+      cancelReminder(appointment.reminders?.h48),
+      cancelReminder(appointment.reminders?.h2),
+    ])
+
+    if (appointment.payment?.status === 'processing') {
+      try {
+        await cancelReaderAction(db, appointment.payment?.paymentIntentId)
+      } catch (err) {
+        // Best-effort — the appointment doc is already gone, so there's no payment state
+        // left to reconcile here even if this fails; power-cycle the reader if it's stuck.
+        console.error('Failed to cancel reader action for deleted appointment:', err)
+      }
+    }
+  },
+)
 
 /** Invoked by Cloud Tasks at the scheduled fire time. Not callable by clients directly. */
 export const sendReminder = onRequest(

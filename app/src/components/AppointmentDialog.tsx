@@ -20,6 +20,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -30,7 +31,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { createAppointment, deleteAppointment, updateAppointment } from '@/hooks/useAppointments'
-import { createCheckoutCharge } from '@/hooks/usePayments'
+import { cancelCheckoutCharge, createCheckoutCharge } from '@/hooks/usePayments'
 import { formatCurrency } from '@/lib/utils'
 import type { Appointment, AppointmentStatus, Client, Service } from '@/types/firestore'
 
@@ -81,6 +82,7 @@ export function AppointmentDialog({
   const [status, setStatus] = useState<AppointmentStatus>('booked')
   const [saving, setSaving] = useState(false)
   const [charging, setCharging] = useState(false)
+  const [chargeAmount, setChargeAmount] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -106,6 +108,10 @@ export function AppointmentDialog({
 
   const selectedService = services.find((s) => s.id === serviceId)
   const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
+
+  useEffect(() => {
+    if (selectedService) setChargeAmount(selectedService.price.toFixed(2))
+  }, [selectedService?.id])
   const startTime = dateValue && timeValue ? new Date(`${dateValue}T${timeValue}`) : null
   const endTime =
     startTime && selectedService ? new Date(startTime.getTime() + selectedService.durationMinutes * 60_000) : null
@@ -159,12 +165,30 @@ export function AppointmentDialog({
 
   async function handleCharge() {
     if (!appointment) return
+    const amountDollars = parseFloat(chargeAmount)
+    if (!Number.isFinite(amountDollars) || amountDollars <= 0) {
+      toast.error('Enter a valid charge amount.')
+      return
+    }
     setCharging(true)
     try {
-      await createCheckoutCharge(appointment.id)
+      await createCheckoutCharge(appointment.id, Math.round(amountDollars * 100))
       toast.success('Charge sent to the reader.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to start the charge.')
+    } finally {
+      setCharging(false)
+    }
+  }
+
+  async function handleCancelCharge() {
+    if (!appointment) return
+    setCharging(true)
+    try {
+      await cancelCheckoutCharge(appointment.id)
+      toast.success('Charge cancelled.')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel the charge.')
     } finally {
       setCharging(false)
     }
@@ -280,14 +304,31 @@ export function AppointmentDialog({
                   {payment?.status === 'paid' && `Paid ${formatCurrency(payment.amount / 100)}`}
                   {payment?.status === 'processing' && 'Waiting for card on reader…'}
                   {payment?.status === 'failed' && 'Payment failed'}
+                  {payment?.status === 'cancelled' && 'Charge cancelled'}
                   {(!payment || payment.status === 'unpaid') && 'Not charged yet'}
                 </span>
-                {payment?.status !== 'paid' && payment?.status !== 'processing' && !serviceChanged && (
-                  <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
-                    {payment?.status === 'failed' ? 'Retry charge' : `Charge ${formatCurrency(selectedService.price)}`}
+                {payment?.status === 'processing' && (
+                  <Button size="sm" variant="outline" onClick={handleCancelCharge} disabled={charging}>
+                    Cancel charge
                   </Button>
                 )}
               </div>
+              {payment?.status !== 'paid' && payment?.status !== 'processing' && !serviceChanged && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">$</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={chargeAmount}
+                    onChange={(e) => setChargeAmount(e.target.value)}
+                    className="h-8 w-24"
+                  />
+                  <Button size="sm" variant="outline" onClick={handleCharge} disabled={charging}>
+                    {payment?.status === 'failed' || payment?.status === 'cancelled' ? 'Retry charge' : 'Charge'}
+                  </Button>
+                </div>
+              )}
               {serviceChanged && (
                 <p className="text-sm text-muted-foreground">Save your change to the service before charging.</p>
               )}
@@ -302,7 +343,11 @@ export function AppointmentDialog({
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete this appointment?</AlertDialogTitle>
-                  <AlertDialogDescription>This cannot be undone.</AlertDialogDescription>
+                  <AlertDialogDescription>
+                    {payment?.status === 'processing'
+                      ? 'This cannot be undone. A charge is currently waiting on the reader — deleting will cancel it there too.'
+                      : 'This cannot be undone.'}
+                  </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
