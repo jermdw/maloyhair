@@ -81,6 +81,24 @@ export interface Settings {
   closedDates?: string[]
 }
 
+/** Read-only reference data imported from the salon's prior DaySmart history. Never
+ *  written by the app itself, and deliberately kept out of /appointments — see import notes. */
+export interface ServiceHistoryEntry {
+  id: string
+  clientId: string
+  clientName: string
+  serviceName: string
+  date: string // "YYYY-MM-DD"
+  startTime: string // "HH:mm"
+  endTime: string
+  /** Cents. */
+  amount: number
+  addonsIncluded?: string
+  legacyTicketId: string
+  legacyServiceId: string
+  legacyDescription: string
+}
+
 export type MessageDirection = 'inbound' | 'outbound'
 
 export interface Message {

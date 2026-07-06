@@ -35,6 +35,7 @@ import {
 import { createAppointment, deleteAppointment, updateAppointment, useAppointments } from '@/hooks/useAppointments'
 import { cancelCheckoutCharge, createCheckoutCharge } from '@/hooks/usePayments'
 import { useSettings } from '@/hooks/useSettings'
+import { useClientServiceHistory } from '@/hooks/useServiceHistory'
 import { formatCurrency } from '@/lib/utils'
 import { generateRecurringDates, occurrencesUntil, MAX_RECURRING_OCCURRENCES } from '@/lib/scheduling'
 import type { Appointment, AppointmentStatus, Client, Service, Settings } from '@/types/firestore'
@@ -138,14 +139,25 @@ export function AppointmentDialog({
   const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
   const selectedClient = clients.find((c) => c.id === clientId)
 
-  const recentVisits = useMemo(
-    () =>
-      appointments
-        .filter((a) => a.clientId === clientId && a.id !== appointment?.id && a.payment?.status === 'paid')
-        .sort((a, b) => b.startTime.toMillis() - a.startTime.toMillis())
-        .slice(0, 3),
-    [appointments, clientId, appointment?.id],
-  )
+  const importedHistory = useClientServiceHistory(clientId || undefined)
+
+  const recentVisits = useMemo(() => {
+    const live = appointments
+      .filter((a) => a.clientId === clientId && a.id !== appointment?.id && a.payment?.status === 'paid')
+      .map((a) => ({
+        id: a.id,
+        date: a.startTime.toDate(),
+        serviceName: services.find((s) => s.id === a.serviceId)?.name ?? 'Unknown service',
+        amount: a.payment!.amount,
+      }))
+    const imported = importedHistory.map((entry) => ({
+      id: entry.id,
+      date: new Date(`${entry.date}T${entry.startTime}`),
+      serviceName: entry.serviceName,
+      amount: entry.amount,
+    }))
+    return [...live, ...imported].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 3)
+  }, [appointments, importedHistory, clientId, appointment?.id, services])
 
   useEffect(() => {
     if (selectedService) setChargeAmount(selectedService.price.toFixed(2))
@@ -327,17 +339,14 @@ export function AppointmentDialog({
           {recentVisits.length > 0 && (
             <div className="flex flex-col gap-1 rounded-lg border border-input px-3 py-2">
               <p className="text-sm text-muted-foreground">Recent visits</p>
-              {recentVisits.map((visit) => {
-                const visitService = services.find((s) => s.id === visit.serviceId)
-                return (
-                  <div key={visit.id} className="flex items-center justify-between text-sm">
-                    <span>
-                      {format(visit.startTime.toDate(), 'MMM d, yyyy')} — {visitService?.name ?? 'Unknown service'}
-                    </span>
-                    <span>{formatCurrency(visit.payment!.amount / 100)}</span>
-                  </div>
-                )
-              })}
+              {recentVisits.map((visit) => (
+                <div key={visit.id} className="flex items-center justify-between text-sm">
+                  <span>
+                    {format(visit.date, 'MMM d, yyyy')} — {visit.serviceName}
+                  </span>
+                  <span>{formatCurrency(visit.amount / 100)}</span>
+                </div>
+              ))}
             </div>
           )}
 

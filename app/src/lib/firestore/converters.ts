@@ -6,7 +6,7 @@ import {
   type SnapshotOptions,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import type { Client, Service, Appointment, Settings, Message } from '@/types/firestore'
+import type { Client, Service, Appointment, Settings, Message, ServiceHistoryEntry } from '@/types/firestore'
 
 function withIdConverter<T extends { id: string }>(): FirestoreDataConverter<T> {
   return {
@@ -24,6 +24,7 @@ export const clientConverter = withIdConverter<Client>()
 export const serviceConverter = withIdConverter<Service>()
 export const appointmentConverter = withIdConverter<Appointment>()
 export const messageConverter = withIdConverter<Message>()
+export const serviceHistoryConverter = withIdConverter<ServiceHistoryEntry>()
 
 export const settingsConverter: FirestoreDataConverter<Settings> = {
   toFirestore(data: Settings) {
@@ -38,6 +39,7 @@ export const clientsCol = () => collection(db, 'clients').withConverter(clientCo
 export const servicesCol = () => collection(db, 'services').withConverter(serviceConverter)
 export const appointmentsCol = () => collection(db, 'appointments').withConverter(appointmentConverter)
 export const messagesCol = () => collection(db, 'messages').withConverter(messageConverter)
+export const serviceHistoryCol = () => collection(db, 'serviceHistory').withConverter(serviceHistoryConverter)
 
 /** Settings is a single fixed document — there is only ever one business to configure. */
 export const settingsDoc = () => doc(db, 'settings', 'main').withConverter(settingsConverter)

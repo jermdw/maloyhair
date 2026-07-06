@@ -10,27 +10,51 @@ import { Textarea } from '@/components/ui/textarea'
 import { updateClient, useClients } from '@/hooks/useClients'
 import { useAppointments } from '@/hooks/useAppointments'
 import { useServices } from '@/hooks/useServices'
+import { useClientServiceHistory } from '@/hooks/useServiceHistory'
 import { MessagesThread } from '@/components/MessagesThread'
 import { formatCurrency } from '@/lib/utils'
+
+interface HistoryRow {
+  id: string
+  date: Date
+  serviceName: string
+  amount: number
+  tipAmount?: number
+  imported: boolean
+}
 
 export function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>()
   const { clients } = useClients()
   const { appointments } = useAppointments()
   const { services } = useServices()
+  const importedHistory = useClientServiceHistory(clientId)
   const client = clients.find((c) => c.id === clientId)
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'messages' ? 'messages' : searchParams.get('tab') === 'history' ? 'history' : 'details'
 
   const servicesById = useMemo(() => new Map(services.map((s) => [s.id, s])), [services])
 
-  const history = useMemo(
-    () =>
-      appointments
-        .filter((a) => a.clientId === clientId && a.payment?.status === 'paid')
-        .sort((a, b) => b.startTime.toMillis() - a.startTime.toMillis()),
-    [appointments, clientId],
-  )
+  const history = useMemo<HistoryRow[]>(() => {
+    const live: HistoryRow[] = appointments
+      .filter((a) => a.clientId === clientId && a.payment?.status === 'paid')
+      .map((a) => ({
+        id: a.id,
+        date: a.startTime.toDate(),
+        serviceName: servicesById.get(a.serviceId)?.name ?? 'Unknown service',
+        amount: a.payment!.amount,
+        tipAmount: a.payment!.tipAmount,
+        imported: false,
+      }))
+    const imported: HistoryRow[] = importedHistory.map((entry) => ({
+      id: entry.id,
+      date: new Date(`${entry.date}T${entry.startTime}`),
+      serviceName: entry.serviceName,
+      amount: entry.amount,
+      imported: true,
+    }))
+    return [...live, ...imported].sort((a, b) => b.date.getTime() - a.date.getTime())
+  }, [appointments, importedHistory, clientId, servicesById])
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -104,32 +128,30 @@ export function ClientDetailPage() {
 
         <TabsContent value="history" className="mt-4">
           {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No paid appointments yet.</p>
+            <p className="text-sm text-muted-foreground">No visit history yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {history.map((appt) => {
-                const service = servicesById.get(appt.serviceId)
-                const payment = appt.payment!
-                const start = appt.startTime.toDate()
-                return (
-                  <div key={appt.id} className="flex items-center justify-between rounded-lg border border-input px-3 py-2">
-                    <div>
-                      <p className="text-sm">{service?.name ?? 'Unknown service'}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(start, 'MMM d, yyyy')} at {format(start, 'h:mm a')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm">{formatCurrency(payment.amount / 100)}</p>
-                      {!!payment.tipAmount && (
-                        <p className="text-sm text-muted-foreground">
-                          incl. {formatCurrency(payment.tipAmount / 100)} tip
-                        </p>
-                      )}
-                    </div>
+              {history.map((row) => (
+                <div key={row.id} className="flex items-center justify-between rounded-lg border border-input px-3 py-2">
+                  <div>
+                    <p className="text-sm">
+                      {row.serviceName}
+                      {row.imported && <span className="ml-2 text-xs text-muted-foreground">(imported)</span>}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {format(row.date, 'MMM d, yyyy')} at {format(row.date, 'h:mm a')}
+                    </p>
                   </div>
-                )
-              })}
+                  <div className="text-right">
+                    <p className="text-sm">{formatCurrency(row.amount / 100)}</p>
+                    {!!row.tipAmount && (
+                      <p className="text-sm text-muted-foreground">
+                        incl. {formatCurrency(row.tipAmount / 100)} tip
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
