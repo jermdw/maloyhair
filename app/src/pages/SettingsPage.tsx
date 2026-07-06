@@ -28,6 +28,8 @@ export function SettingsPage() {
   const [businessPhone, setBusinessPhone] = useState('')
   const [stripeReaderId, setStripeReaderId] = useState('')
   const [rows, setRows] = useState<DayRow[]>(toRows(undefined))
+  const [closedDates, setClosedDates] = useState<string[]>([])
+  const [newClosedDate, setNewClosedDate] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -36,10 +38,21 @@ export function SettingsPage() {
     setBusinessPhone(settings.businessPhone)
     setStripeReaderId(settings.stripeReaderId ?? '')
     setRows(toRows(settings.businessHours))
+    setClosedDates(settings.closedDates ?? [])
   }, [settings])
 
   function updateRow(day: number, patch: Partial<DayRow>) {
     setRows((prev) => prev.map((row, i) => (i === day ? { ...row, ...patch } : row)))
+  }
+
+  function addClosedDate() {
+    if (!newClosedDate || closedDates.includes(newClosedDate)) return
+    setClosedDates((prev) => [...prev, newClosedDate].sort())
+    setNewClosedDate('')
+  }
+
+  function removeClosedDate(date: string) {
+    setClosedDates((prev) => prev.filter((d) => d !== date))
   }
 
   async function handleSave() {
@@ -64,6 +77,7 @@ export function SettingsPage() {
         businessPhone: normalizedPhone,
         businessHours,
         stripeReaderId: stripeReaderId.trim() || undefined,
+        closedDates,
       })
       toast.success('Settings saved.')
     } catch (err) {
@@ -129,6 +143,32 @@ export function SettingsPage() {
               )}
             </div>
           ))}
+        </div>
+
+        <div className="mt-2 flex flex-col gap-2">
+          <Label>Closed dates</Label>
+          <p className="text-sm text-muted-foreground">
+            Holidays or other one-off days the salon is closed. Recurring bookings skip these automatically.
+          </p>
+          {closedDates.map((date) => (
+            <div key={date} className="flex items-center gap-3">
+              <span className="text-sm">{date}</span>
+              <Button size="sm" variant="ghost" onClick={() => removeClosedDate(date)}>
+                Remove
+              </Button>
+            </div>
+          ))}
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={newClosedDate}
+              onChange={(e) => setNewClosedDate(e.target.value)}
+              className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm"
+            />
+            <Button size="sm" variant="outline" onClick={addClosedDate}>
+              Add
+            </Button>
+          </div>
         </div>
 
         <Button className="mt-2 self-start" onClick={handleSave} disabled={saving}>

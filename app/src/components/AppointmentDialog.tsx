@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { format } from 'date-fns'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -30,10 +32,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { createAppointment, deleteAppointment, updateAppointment } from '@/hooks/useAppointments'
+import { createAppointment, deleteAppointment, updateAppointment, useAppointments } from '@/hooks/useAppointments'
 import { cancelCheckoutCharge, createCheckoutCharge } from '@/hooks/usePayments'
+import { useSettings } from '@/hooks/useSettings'
 import { formatCurrency } from '@/lib/utils'
-import type { Appointment, AppointmentStatus, Client, Service } from '@/types/firestore'
+import { generateRecurringDates, occurrencesUntil, MAX_RECURRING_OCCURRENCES } from '@/lib/scheduling'
+import type { Appointment, AppointmentStatus, Client, Service, Settings } from '@/types/firestore'
 
 const STATUS_OPTIONS: AppointmentStatus[] = ['booked', 'confirmed', 'cancelled', 'completed', 'no_show']
 
@@ -60,6 +64,16 @@ function toTimeInputValue(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+/** Clicking a day in month view gives a start time of exactly midnight (no time was actually
+ *  picked), which otherwise leaves the time input defaulted to 00:00. */
+function isMidnight(date: Date): boolean {
+  return date.getHours() === 0 && date.getMinutes() === 0
+}
+
+function workdayStart(date: Date, settings: Settings | null): string {
+  return settings?.businessHours?.[date.getDay()]?.start ?? '09:00'
+}
+
 export function AppointmentDialog({
   open,
   onOpenChange,
@@ -74,6 +88,9 @@ export function AppointmentDialog({
   const liveStatusChanged =
     isEditing && liveAppointment != null && appointment != null && liveAppointment.status !== appointment.status
 
+  const { appointments } = useAppointments()
+  const { settings } = useSettings()
+
   const [clientId, setClientId] = useState('')
   const [serviceId, setServiceId] = useState('')
   const [dateValue, setDateValue] = useState('')
@@ -83,6 +100,12 @@ export function AppointmentDialog({
   const [saving, setSaving] = useState(false)
   const [charging, setCharging] = useState(false)
   const [chargeAmount, setChargeAmount] = useState('')
+
+  const [repeatEnabled, setRepeatEnabled] = useState(false)
+  const [repeatIntervalWeeks, setRepeatIntervalWeeks] = useState('6')
+  const [repeatMode, setRepeatMode] = useState<'count' | 'until'>('count')
+  const [repeatCount, setRepeatCount] = useState('6')
+  const [repeatUntilDate, setRepeatUntilDate] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -100,14 +123,29 @@ export function AppointmentDialog({
       setClientId('')
       setServiceId('')
       setDateValue(toDateInputValue(start))
-      setTimeValue(toTimeInputValue(start))
+      setTimeValue(isMidnight(start) ? workdayStart(start, settings) : toTimeInputValue(start))
       setNotes('')
       setStatus('booked')
     }
-  }, [open, appointment, defaultStart])
+    setRepeatEnabled(false)
+    setRepeatIntervalWeeks('6')
+    setRepeatMode('count')
+    setRepeatCount('6')
+    setRepeatUntilDate('')
+  }, [open, appointment, defaultStart, settings])
 
   const selectedService = services.find((s) => s.id === serviceId)
   const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
+  const selectedClient = clients.find((c) => c.id === clientId)
+
+  const recentVisits = useMemo(
+    () =>
+      appointments
+        .filter((a) => a.clientId === clientId && a.id !== appointment?.id && a.payment?.status === 'paid')
+        .sort((a, b) => b.startTime.toMillis() - a.startTime.toMillis())
+        .slice(0, 3),
+    [appointments, clientId, appointment?.id],
+  )
 
   useEffect(() => {
     if (selectedService) setChargeAmount(selectedService.price.toFixed(2))
@@ -120,6 +158,45 @@ export function AppointmentDialog({
     if (!clientId || !serviceId || !startTime || !selectedService) {
       toast.error('Please fill in client, service, date, and time.')
       return
+    }
+
+    let additionalDates: Date[] = []
+    if (!isEditing && repeatEnabled) {
+      const intervalWeeks = parseInt(repeatIntervalWeeks, 10)
+      if (!Number.isInteger(intervalWeeks) || intervalWeeks <= 0) {
+        toast.error('Enter a valid repeat interval in weeks.')
+        return
+      }
+
+      let additionalCount: number
+      if (repeatMode === 'count') {
+        const totalCount = parseInt(repeatCount, 10)
+        if (!Number.isInteger(totalCount) || totalCount <= 0) {
+          toast.error('Enter a valid number of occurrences.')
+          return
+        }
+        additionalCount = totalCount - 1
+      } else {
+        const untilDate = repeatUntilDate ? new Date(`${repeatUntilDate}T23:59`) : null
+        if (!untilDate || untilDate <= startTime) {
+          toast.error('Enter an end date after the first appointment.')
+          return
+        }
+        additionalCount = occurrencesUntil(startTime, intervalWeeks, untilDate)
+      }
+
+      if (additionalCount + 1 > MAX_RECURRING_OCCURRENCES) {
+        toast.error(`That range creates too many appointments at once (max ${MAX_RECURRING_OCCURRENCES}). Shorten it.`)
+        return
+      }
+
+      additionalDates = generateRecurringDates(
+        startTime,
+        intervalWeeks,
+        additionalCount,
+        settings?.businessHours ?? {},
+        settings?.closedDates ?? [],
+      )
     }
 
     setSaving(true)
@@ -142,7 +219,20 @@ export function AppointmentDialog({
           durationMinutes: selectedService.durationMinutes,
           notes: notes || undefined,
         })
-        toast.success('Appointment created.')
+        for (const date of additionalDates) {
+          await createAppointment({
+            clientId,
+            serviceId,
+            startTime: date,
+            durationMinutes: selectedService.durationMinutes,
+            notes: notes || undefined,
+          })
+        }
+        toast.success(
+          additionalDates.length > 0
+            ? `Created ${additionalDates.length + 1} appointments.`
+            : 'Appointment created.',
+        )
       }
       onOpenChange(false)
     } catch (err) {
@@ -206,7 +296,18 @@ export function AppointmentDialog({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label>Client</Label>
+            <div className="flex items-center justify-between">
+              <Label>Client</Label>
+              {selectedClient && (
+                <Link
+                  to={`/clients/${selectedClient.id}`}
+                  onClick={() => onOpenChange(false)}
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  View profile →
+                </Link>
+              )}
+            </div>
             <Select value={clientId} onValueChange={(v) => setClientId(v as string)}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a client">
@@ -222,6 +323,23 @@ export function AppointmentDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {recentVisits.length > 0 && (
+            <div className="flex flex-col gap-1 rounded-lg border border-input px-3 py-2">
+              <p className="text-sm text-muted-foreground">Recent visits</p>
+              {recentVisits.map((visit) => {
+                const visitService = services.find((s) => s.id === visit.serviceId)
+                return (
+                  <div key={visit.id} className="flex items-center justify-between text-sm">
+                    <span>
+                      {format(visit.startTime.toDate(), 'MMM d, yyyy')} — {visitService?.name ?? 'Unknown service'}
+                    </span>
+                    <span>{formatCurrency(visit.payment!.amount / 100)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label>Service</Label>
@@ -267,6 +385,70 @@ export function AppointmentDialog({
 
           {endTime && (
             <p className="text-sm text-muted-foreground">Ends at {toTimeInputValue(endTime)}</p>
+          )}
+
+          {!isEditing && (
+            <div className="flex flex-col gap-2 rounded-lg border border-input px-3 py-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={repeatEnabled}
+                  onChange={(e) => setRepeatEnabled(e.target.checked)}
+                />
+                Repeat this appointment
+              </label>
+              {repeatEnabled && (
+                <div className="flex flex-col gap-2 pl-6">
+                  <div className="flex items-center gap-2 text-sm">
+                    Every
+                    <Input
+                      type="number"
+                      min="1"
+                      value={repeatIntervalWeeks}
+                      onChange={(e) => setRepeatIntervalWeeks(e.target.value)}
+                      className="h-8 w-16"
+                    />
+                    weeks
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-1">
+                      <input
+                        type="radio"
+                        checked={repeatMode === 'count'}
+                        onChange={() => setRepeatMode('count')}
+                      />
+                      For
+                    </label>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={repeatCount}
+                      onChange={(e) => setRepeatCount(e.target.value)}
+                      disabled={repeatMode !== 'count'}
+                      className="h-8 w-16"
+                    />
+                    occurrences
+                  </div>
+                  <div className="flex items-center gap-2 text-sm">
+                    <label className="flex items-center gap-1">
+                      <input
+                        type="radio"
+                        checked={repeatMode === 'until'}
+                        onChange={() => setRepeatMode('until')}
+                      />
+                      Until
+                    </label>
+                    <input
+                      type="date"
+                      value={repeatUntilDate}
+                      onChange={(e) => setRepeatUntilDate(e.target.value)}
+                      disabled={repeatMode !== 'until'}
+                      className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {isEditing && (

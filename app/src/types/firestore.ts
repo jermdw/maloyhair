@@ -76,6 +76,9 @@ export interface Settings {
   businessHours: BusinessHours
   /** Stripe Terminal reader ID (tmr_...), registered one-time via the Stripe Dashboard. */
   stripeReaderId?: string
+  /** One-off closed dates (holidays, vacation days), as "YYYY-MM-DD". Checked by recurring
+   *  appointment generation in addition to the weekly businessHours. */
+  closedDates?: string[]
 }
 
 export type MessageDirection = 'inbound' | 'outbound'
