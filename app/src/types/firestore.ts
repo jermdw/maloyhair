@@ -51,13 +51,25 @@ export interface AppointmentPayment {
   updatedAt: Timestamp
 }
 
+export interface AppointmentSegment {
+  startTime: Timestamp
+  endTime: Timestamp
+  label: string
+}
+
 export interface Appointment {
   id: string
   clientId: string
   /** One or more services booked together (e.g. a base service plus an add-on). */
   serviceIds: string[]
+  /** Overall visit span — segments[0].startTime and segments[last].endTime when segmented. */
   startTime: Timestamp
   endTime: Timestamp
+  /** When present (always exactly 2: Setup, Finish), the appointment occupies two separate
+   *  calendar blocks with a gap between them (e.g. color processing time) instead of one
+   *  continuous block from startTime to endTime. The gap itself isn't a segment — it's just
+   *  the absence of a block, free for another appointment. */
+  segments?: AppointmentSegment[]
   status: AppointmentStatus
   notes?: string
   reminders: {

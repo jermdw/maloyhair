@@ -111,6 +111,11 @@ export function AppointmentDialog({
   const [repeatCount, setRepeatCount] = useState('6')
   const [repeatUntilDate, setRepeatUntilDate] = useState('')
 
+  const [segmentedEnabled, setSegmentedEnabled] = useState(false)
+  const [setupMinutes, setSetupMinutes] = useState('30')
+  const [gapMinutes, setGapMinutes] = useState('45')
+  const [finishMinutes, setFinishMinutes] = useState('45')
+
   useEffect(() => {
     if (!open) return
 
@@ -122,6 +127,23 @@ export function AppointmentDialog({
       setTimeValue(toTimeInputValue(start))
       setNotes(appointment.notes ?? '')
       setStatus(appointment.status)
+
+      if (appointment.segments && appointment.segments.length === 2) {
+        const [setup, finish] = appointment.segments
+        const setupStart = setup.startTime.toDate()
+        const setupEnd = setup.endTime.toDate()
+        const finishStart = finish.startTime.toDate()
+        const finishEnd = finish.endTime.toDate()
+        setSegmentedEnabled(true)
+        setSetupMinutes(String(Math.round((setupEnd.getTime() - setupStart.getTime()) / 60_000)))
+        setGapMinutes(String(Math.round((finishStart.getTime() - setupEnd.getTime()) / 60_000)))
+        setFinishMinutes(String(Math.round((finishEnd.getTime() - finishStart.getTime()) / 60_000)))
+      } else {
+        setSegmentedEnabled(false)
+        setSetupMinutes('30')
+        setGapMinutes('45')
+        setFinishMinutes('45')
+      }
     } else {
       const start = defaultStart ?? new Date()
       setClientId(defaultClientId ?? '')
@@ -130,6 +152,10 @@ export function AppointmentDialog({
       setTimeValue(isMidnight(start) ? workdayStart(start, settings) : toTimeInputValue(start))
       setNotes('')
       setStatus('booked')
+      setSegmentedEnabled(false)
+      setSetupMinutes('30')
+      setGapMinutes('45')
+      setFinishMinutes('45')
     }
     setRepeatEnabled(false)
     setRepeatIntervalWeeks('6')
@@ -176,12 +202,40 @@ export function AppointmentDialog({
     if (selectedServices.length > 0) setChargeAmount(totalPrice.toFixed(2))
   }, [serviceIds.join(',')])
   const startTime = dateValue && timeValue ? new Date(`${dateValue}T${timeValue}`) : null
-  const endTime =
-    startTime && selectedServices.length > 0 ? new Date(startTime.getTime() + totalDuration * 60_000) : null
+
+  // When segmented, this is the source of truth for the visit's actual time blocks — the
+  // "Ends at" display, endTime, and durationMinutes below all derive from it rather than
+  // from the selected services' combined duration.
+  const segmentsPreview = (() => {
+    if (!segmentedEnabled || !startTime) return null
+    const setupMin = parseInt(setupMinutes, 10)
+    const gapMin = parseInt(gapMinutes, 10)
+    const finishMin = parseInt(finishMinutes, 10)
+    if (!Number.isInteger(setupMin) || setupMin <= 0) return null
+    if (!Number.isInteger(gapMin) || gapMin < 0) return null
+    if (!Number.isInteger(finishMin) || finishMin <= 0) return null
+    const setupEnd = new Date(startTime.getTime() + setupMin * 60_000)
+    const finishStart = new Date(setupEnd.getTime() + gapMin * 60_000)
+    const finishEnd = new Date(finishStart.getTime() + finishMin * 60_000)
+    return [
+      { startTime, endTime: setupEnd, label: 'Setup' },
+      { startTime: finishStart, endTime: finishEnd, label: 'Finish' },
+    ]
+  })()
+
+  const endTime = segmentsPreview
+    ? segmentsPreview[1].endTime
+    : startTime && selectedServices.length > 0
+      ? new Date(startTime.getTime() + totalDuration * 60_000)
+      : null
 
   async function handleSubmit() {
     if (!clientId || serviceIds.length === 0 || !startTime || selectedServices.length === 0) {
       toast.error('Please fill in client, service, date, and time.')
+      return
+    }
+    if (segmentedEnabled && !segmentsPreview) {
+      toast.error('Enter valid setup, gap, and finish durations.')
       return
     }
 
@@ -224,6 +278,10 @@ export function AppointmentDialog({
       )
     }
 
+    const visitDurationMinutes = segmentsPreview
+      ? Math.round((segmentsPreview[1].endTime.getTime() - startTime.getTime()) / 60_000)
+      : totalDuration
+
     setSaving(true)
     try {
       if (isEditing && appointment) {
@@ -231,7 +289,8 @@ export function AppointmentDialog({
           clientId,
           serviceIds,
           startTime,
-          durationMinutes: totalDuration,
+          durationMinutes: visitDurationMinutes,
+          segments: segmentsPreview ?? (appointment.segments ? null : undefined),
           status,
           notes: notes || undefined,
         })
@@ -241,7 +300,8 @@ export function AppointmentDialog({
           clientId,
           serviceIds,
           startTime,
-          durationMinutes: totalDuration,
+          durationMinutes: visitDurationMinutes,
+          segments: segmentsPreview ?? undefined,
           notes: notes || undefined,
         })
         for (const date of additionalDates) {
@@ -429,9 +489,61 @@ export function AppointmentDialog({
             </div>
           </div>
 
-          {endTime && (
-            <p className="text-sm text-muted-foreground">Ends at {toTimeInputValue(endTime)}</p>
+          {segmentsPreview ? (
+            <p className="text-sm text-muted-foreground">
+              Setup {toTimeInputValue(segmentsPreview[0].startTime)}–{toTimeInputValue(segmentsPreview[0].endTime)},
+              gap until {toTimeInputValue(segmentsPreview[1].startTime)}, Finish{' '}
+              {toTimeInputValue(segmentsPreview[1].startTime)}–{toTimeInputValue(segmentsPreview[1].endTime)}
+            </p>
+          ) : (
+            endTime && <p className="text-sm text-muted-foreground">Ends at {toTimeInputValue(endTime)}</p>
           )}
+
+          <div className="flex flex-col gap-2 rounded-lg border border-input px-3 py-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={segmentedEnabled}
+                disabled={repeatEnabled}
+                onChange={(e) => setSegmentedEnabled(e.target.checked)}
+              />
+              This service has a processing gap (setup, then a gap, then finish)
+            </label>
+            {segmentedEnabled && (
+              <div className="flex flex-col gap-2 pl-6 text-sm">
+                <div className="flex items-center gap-2">
+                  Setup
+                  <Input
+                    type="number"
+                    min="1"
+                    value={setupMinutes}
+                    onChange={(e) => setSetupMinutes(e.target.value)}
+                    className="h-8 w-16"
+                  />
+                  min, gap
+                  <Input
+                    type="number"
+                    min="0"
+                    value={gapMinutes}
+                    onChange={(e) => setGapMinutes(e.target.value)}
+                    className="h-8 w-16"
+                  />
+                  min, finish
+                  <Input
+                    type="number"
+                    min="1"
+                    value={finishMinutes}
+                    onChange={(e) => setFinishMinutes(e.target.value)}
+                    className="h-8 w-16"
+                  />
+                  min
+                </div>
+                <p className="text-muted-foreground">
+                  The gap is left open on the calendar — another client can be booked during it.
+                </p>
+              </div>
+            )}
+          </div>
 
           {!isEditing && (
             <div className="flex flex-col gap-2 rounded-lg border border-input px-3 py-2">
@@ -439,6 +551,7 @@ export function AppointmentDialog({
                 <input
                   type="checkbox"
                   checked={repeatEnabled}
+                  disabled={segmentedEnabled}
                   onChange={(e) => setRepeatEnabled(e.target.checked)}
                 />
                 Repeat this appointment

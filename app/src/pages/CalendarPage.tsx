@@ -65,16 +65,33 @@ export function CalendarPage() {
 
   const events = useMemo<CalendarEvent[]>(
     () =>
-      appointments.map((appt) => {
+      appointments.flatMap((appt) => {
         const client = clientsById.get(appt.clientId)
         const serviceNames = (appt.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + ')
-        return {
-          id: appt.id,
-          title: `${client?.name ?? 'Unknown client'} — ${serviceNames}`,
-          start: appt.startTime.toDate(),
-          end: appt.endTime.toDate(),
-          resource: appt,
+        const title = `${client?.name ?? 'Unknown client'} — ${serviceNames}`
+
+        // A segmented appointment (e.g. color setup / processing gap / finish) renders as two
+        // separate blocks on the calendar, both pointing at the same underlying appointment —
+        // clicking either opens the same edit dialog. The gap itself isn't a block; it's just
+        // free time between them, bookable like any other slot.
+        if (appt.segments && appt.segments.length > 0) {
+          return appt.segments.map((seg, i) => ({
+            id: `${appt.id}-${i}`,
+            title: `${title} (${seg.label})`,
+            start: seg.startTime.toDate(),
+            end: seg.endTime.toDate(),
+            resource: appt,
+          }))
         }
+        return [
+          {
+            id: appt.id,
+            title,
+            start: appt.startTime.toDate(),
+            end: appt.endTime.toDate(),
+            resource: appt,
+          },
+        ]
       }),
     [appointments, clientsById, servicesById],
   )
