@@ -301,7 +301,10 @@ export function AppointmentDialog({
             <div className="flex flex-col gap-1.5 rounded-lg border border-input px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm">
-                  {payment?.status === 'paid' && `Paid ${formatCurrency(payment.amount / 100)}`}
+                  {payment?.status === 'paid' &&
+                    `Paid ${formatCurrency(payment.amount / 100)}${
+                      payment.tipAmount ? ` (incl. ${formatCurrency(payment.tipAmount / 100)} tip)` : ''
+                    }`}
                   {payment?.status === 'processing' && 'Waiting for card on reader…'}
                   {payment?.status === 'failed' && 'Payment failed'}
                   {payment?.status === 'cancelled' && 'Charge cancelled'}

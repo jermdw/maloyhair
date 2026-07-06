@@ -112,6 +112,10 @@ export const createCheckoutCharge = onCall(
         currency: 'usd',
         payment_method_types: ['card_present'],
         capture_method: 'automatic',
+        // Stripe's recommended pairing for Terminal PaymentIntents — gives the reader room
+        // to fold an on-reader tip into the authorization before it captures, rather than
+        // capturing the pre-tip amount and losing the tip.
+        payment_method_options: { card_present: { capture_method: 'manual_preferred' } },
         receipt_email: client?.email,
         metadata: { appointmentId },
       })
@@ -125,7 +129,14 @@ export const createCheckoutCharge = onCall(
         },
       })
 
-      await stripe.terminal.readers.processPaymentIntent(readerId, { payment_intent: paymentIntent.id })
+      // amount_eligible tells the reader to show its on-reader tipping screen, with
+      // percentages calculated against the pre-tip service total (configured account-wide
+      // in the Stripe Dashboard's Terminal Configuration). Stripe folds any tip the client
+      // selects into the PaymentIntent automatically; stripeWebhook records it once paid.
+      await stripe.terminal.readers.processPaymentIntent(readerId, {
+        payment_intent: paymentIntent.id,
+        process_config: { tipping: { amount_eligible: amount } },
+      })
 
       return { success: true }
     } catch (err) {
@@ -221,7 +232,11 @@ export const stripeWebhook = onRequest(
 
     const db = getFirestore()
 
-    async function setPaymentStatus(appointmentId: string | undefined, status: 'paid' | 'failed') {
+    async function setPaymentStatus(
+      appointmentId: string | undefined,
+      status: 'paid' | 'failed',
+      paymentIntent?: Stripe.PaymentIntent,
+    ) {
       if (!appointmentId) return
 
       const apptRef = db.collection('appointments').doc(appointmentId)
@@ -238,6 +253,13 @@ export const stripeWebhook = onRequest(
       const patch: Record<string, unknown> = {
         'payment.status': status,
         'payment.updatedAt': FieldValue.serverTimestamp(),
+      }
+      // On success, record the actual total charged (which may include an on-reader tip
+      // the client added, folded into the PaymentIntent by Stripe) and the tip portion.
+      if (status === 'paid' && paymentIntent) {
+        patch['payment.amount'] = paymentIntent.amount_received
+        const tipAmount = paymentIntent.amount_details?.tip?.amount
+        if (tipAmount) patch['payment.tipAmount'] = tipAmount
       }
       // Only advance the scheduling status on success, and only if the appointment
       // hasn't been cancelled/marked no-show elsewhere in the meantime, and isn't
@@ -259,7 +281,7 @@ export const stripeWebhook = onRequest(
       switch (event.type) {
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent
-          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'paid')
+          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'paid', paymentIntent)
           break
         }
         case 'payment_intent.payment_failed': {

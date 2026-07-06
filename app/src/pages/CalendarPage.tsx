@@ -24,6 +24,15 @@ const STATUS_COLORS: Record<AppointmentStatus, string> = {
   no_show: '#B2452F',
 }
 
+/** A paid/closed-out charge gets its own color regardless of scheduling status, since
+ *  "confirmed" and "completed" otherwise both read as similar greens on the calendar. */
+const PAID_COLOR = '#7A5A3A'
+
+function eventColor(appointment: Appointment): string {
+  if (appointment.payment?.status === 'paid') return PAID_COLOR
+  return STATUS_COLORS[appointment.status]
+}
+
 interface CalendarEvent {
   id: string
   title: string
@@ -92,7 +101,7 @@ export function CalendarPage() {
         onSelectSlot={(slotInfo) => openCreateDialog(slotInfo.start)}
         onSelectEvent={(event) => openEditDialog((event as CalendarEvent).resource)}
         eventPropGetter={(event) => ({
-          style: { backgroundColor: STATUS_COLORS[(event as CalendarEvent).resource.status] },
+          style: { backgroundColor: eventColor((event as CalendarEvent).resource) },
         })}
       />
       <AppointmentDialog

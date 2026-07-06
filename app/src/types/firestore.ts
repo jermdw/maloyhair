@@ -41,8 +41,10 @@ export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed' | 'cance
 /** Tracks a Stripe Terminal checkout charge, separate from the appointment's scheduling `status`. */
 export interface AppointmentPayment {
   status: PaymentStatus
-  /** Cents, snapshotted from the service price at charge time. */
+  /** Cents. Total amount charged, including any tip the client added on the reader. */
   amount: number
+  /** Cents. Portion of `amount` that was a tip, reported by Stripe once paid. */
+  tipAmount?: number
   paymentIntentId?: string
   updatedAt: Timestamp
 }
