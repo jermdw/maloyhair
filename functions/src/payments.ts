@@ -86,15 +86,16 @@ export const createCheckoutCharge = onCall(
     })
 
     try {
-      const [serviceSnap, clientSnap, settingsSnap] = await Promise.all([
-        db.collection('services').doc(appointment.serviceId).get(),
+      const serviceIds: string[] = appointment.serviceIds ?? []
+      const [serviceSnaps, clientSnap, settingsSnap] = await Promise.all([
+        Promise.all(serviceIds.map((id: string) => db.collection('services').doc(id).get())),
         db.collection('clients').doc(appointment.clientId).get(),
         db.collection('settings').doc('main').get(),
       ])
 
-      const service = serviceSnap.data()
-      if (!service) {
-        throw new HttpsError('not-found', 'Service not found.')
+      const servicesTotal = serviceSnaps.reduce((sum, snap) => sum + (snap.data()?.price ?? 0), 0)
+      if (serviceSnaps.some((snap) => !snap.exists)) {
+        throw new HttpsError('not-found', 'One or more services on this appointment no longer exist.')
       }
 
       const readerId = settingsSnap.data()?.stripeReaderId
@@ -102,7 +103,7 @@ export const createCheckoutCharge = onCall(
         throw new HttpsError('failed-precondition', 'No Stripe reader configured — set one on the Settings page.')
       }
 
-      const amount = amountOverride ?? Math.round(service.price * 100)
+      const amount = amountOverride ?? Math.round(servicesTotal * 100)
       const client = clientSnap.data()
 
       const stripe = new Stripe(stripeSecretKey.value())

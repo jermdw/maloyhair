@@ -21,9 +21,9 @@ export function useAppointments() {
 
 export interface AppointmentCreateInput {
   clientId: string
-  serviceId: string
+  serviceIds: string[]
   startTime: Date
-  /** The selected service's durationMinutes, used to compute endTime. */
+  /** Sum of the selected services' durationMinutes, used to compute endTime. */
   durationMinutes: number
   notes?: string
 }
@@ -33,7 +33,7 @@ export async function createAppointment(input: AppointmentCreateInput) {
 
   await addDoc(collection(db, 'appointments'), {
     clientId: input.clientId,
-    serviceId: input.serviceId,
+    serviceIds: input.serviceIds,
     startTime: Timestamp.fromDate(input.startTime),
     endTime: Timestamp.fromDate(endTime),
     status: 'booked' as AppointmentStatus,
@@ -48,9 +48,9 @@ export async function createAppointment(input: AppointmentCreateInput) {
 
 export interface AppointmentUpdateInput {
   clientId?: string
-  serviceId?: string
+  serviceIds?: string[]
   startTime?: Date
-  /** Required alongside startTime (or when serviceId changes) to recompute endTime. */
+  /** Required alongside startTime (or when serviceIds changes) to recompute endTime. */
   durationMinutes?: number
   status?: AppointmentStatus
   notes?: string
@@ -59,7 +59,7 @@ export interface AppointmentUpdateInput {
 export async function updateAppointment(id: string, patch: AppointmentUpdateInput) {
   const data: Record<string, unknown> = {}
   if (patch.clientId !== undefined) data.clientId = patch.clientId
-  if (patch.serviceId !== undefined) data.serviceId = patch.serviceId
+  if (patch.serviceIds !== undefined) data.serviceIds = patch.serviceIds
   if (patch.status !== undefined) data.status = patch.status
   if (patch.notes !== undefined) data.notes = patch.notes
   if (patch.startTime !== undefined) {

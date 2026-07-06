@@ -54,7 +54,8 @@ export interface AppointmentPayment {
 export interface Appointment {
   id: string
   clientId: string
-  serviceId: string
+  /** One or more services booked together (e.g. a base service plus an add-on). */
+  serviceIds: string[]
   startTime: Timestamp
   endTime: Timestamp
   status: AppointmentStatus

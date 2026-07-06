@@ -5,6 +5,7 @@ import { enUS } from 'date-fns/locale'
 import { useAppointments } from '@/hooks/useAppointments'
 import { useClients } from '@/hooks/useClients'
 import { useServices } from '@/hooks/useServices'
+import { useSettings } from '@/hooks/useSettings'
 import { AppointmentDialog } from '@/components/AppointmentDialog'
 import type { Appointment, AppointmentStatus } from '@/types/firestore'
 
@@ -33,6 +34,12 @@ function eventColor(appointment: Appointment): string {
   return STATUS_COLORS[appointment.status]
 }
 
+/** RBC's min/max only care about the time-of-day component, so any date works here. */
+function timeToDate(hhmm: string): Date {
+  const [h, m] = hhmm.split(':').map(Number)
+  return new Date(1970, 0, 1, h, m)
+}
+
 interface CalendarEvent {
   id: string
   title: string
@@ -45,6 +52,7 @@ export function CalendarPage() {
   const { appointments } = useAppointments()
   const { clients } = useClients()
   const { services } = useServices()
+  const { settings } = useSettings()
 
   const [view, setView] = useState<View>('month')
   const [date, setDate] = useState(new Date())
@@ -59,10 +67,10 @@ export function CalendarPage() {
     () =>
       appointments.map((appt) => {
         const client = clientsById.get(appt.clientId)
-        const service = servicesById.get(appt.serviceId)
+        const serviceNames = (appt.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + ')
         return {
           id: appt.id,
-          title: `${client?.name ?? 'Unknown client'} — ${service?.name ?? 'Unknown service'}`,
+          title: `${client?.name ?? 'Unknown client'} — ${serviceNames}`,
           start: appt.startTime.toDate(),
           end: appt.endTime.toDate(),
           resource: appt,
@@ -70,6 +78,14 @@ export function CalendarPage() {
       }),
     [appointments, clientsById, servicesById],
   )
+
+  const [minTime, maxTime] = useMemo(() => {
+    const ranges = Object.values(settings?.businessHours ?? {})
+    if (ranges.length === 0) return [timeToDate('09:00'), timeToDate('20:00')]
+    const starts = ranges.map((r) => r.start).sort()
+    const ends = ranges.map((r) => r.end).sort()
+    return [timeToDate(starts[0]), timeToDate(ends[ends.length - 1])]
+  }, [settings])
 
   function openCreateDialog(start: Date) {
     setEditingAppointment(null)
@@ -96,7 +112,9 @@ export function CalendarPage() {
         onView={setView}
         date={date}
         onNavigate={setDate}
-        views={['month', 'week']}
+        views={['month', 'work_week']}
+        min={minTime}
+        max={maxTime}
         style={{ height: 700 }}
         onSelectSlot={(slotInfo) => openCreateDialog(slotInfo.start)}
         onSelectEvent={(event) => openEditDialog((event as CalendarEvent).resource)}

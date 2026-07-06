@@ -43,7 +43,7 @@ export function ClientDetailPage() {
       .map((a) => ({
         id: a.id,
         date: a.startTime.toDate(),
-        serviceName: servicesById.get(a.serviceId)?.name ?? 'Unknown service',
+        serviceName: (a.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + '),
         amount: a.payment!.amount,
         tipAmount: a.payment!.tipAmount,
         method: a.payment!.method,

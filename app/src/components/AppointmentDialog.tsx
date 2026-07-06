@@ -96,7 +96,7 @@ export function AppointmentDialog({
   const { settings } = useSettings()
 
   const [clientId, setClientId] = useState('')
-  const [serviceId, setServiceId] = useState('')
+  const [serviceIds, setServiceIds] = useState<string[]>([])
   const [dateValue, setDateValue] = useState('')
   const [timeValue, setTimeValue] = useState('')
   const [notes, setNotes] = useState('')
@@ -117,7 +117,7 @@ export function AppointmentDialog({
     if (appointment) {
       const start = appointment.startTime.toDate()
       setClientId(appointment.clientId)
-      setServiceId(appointment.serviceId)
+      setServiceIds(appointment.serviceIds ?? [])
       setDateValue(toDateInputValue(start))
       setTimeValue(toTimeInputValue(start))
       setNotes(appointment.notes ?? '')
@@ -125,7 +125,7 @@ export function AppointmentDialog({
     } else {
       const start = defaultStart ?? new Date()
       setClientId(defaultClientId ?? '')
-      setServiceId('')
+      setServiceIds([])
       setDateValue(toDateInputValue(start))
       setTimeValue(isMidnight(start) ? workdayStart(start, settings) : toTimeInputValue(start))
       setNotes('')
@@ -138,9 +138,18 @@ export function AppointmentDialog({
     setRepeatUntilDate('')
   }, [open, appointment, defaultStart, defaultClientId, settings])
 
-  const selectedService = services.find((s) => s.id === serviceId)
-  const serviceChanged = isEditing && appointment != null && serviceId !== appointment.serviceId
+  const selectedServices = services.filter((s) => serviceIds.includes(s.id))
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0)
+  const totalPrice = selectedServices.reduce((sum, s) => sum + s.price, 0)
+  const serviceChanged =
+    isEditing &&
+    appointment != null &&
+    JSON.stringify([...serviceIds].sort()) !== JSON.stringify([...(appointment.serviceIds ?? [])].sort())
   const selectedClient = clients.find((c) => c.id === clientId)
+
+  function toggleService(id: string) {
+    setServiceIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]))
+  }
 
   const importedHistory = useClientServiceHistory(clientId || undefined)
 
@@ -150,7 +159,8 @@ export function AppointmentDialog({
       .map((a) => ({
         id: a.id,
         date: a.startTime.toDate(),
-        serviceName: services.find((s) => s.id === a.serviceId)?.name ?? 'Unknown service',
+        serviceName:
+          (a.serviceIds ?? []).map((id) => services.find((s) => s.id === id)?.name ?? 'Unknown service').join(' + '),
         amount: a.payment!.amount,
       }))
     const imported = importedHistory.map((entry) => ({
@@ -163,14 +173,14 @@ export function AppointmentDialog({
   }, [appointments, importedHistory, clientId, appointment?.id, services])
 
   useEffect(() => {
-    if (selectedService) setChargeAmount(selectedService.price.toFixed(2))
-  }, [selectedService?.id])
+    if (selectedServices.length > 0) setChargeAmount(totalPrice.toFixed(2))
+  }, [serviceIds.join(',')])
   const startTime = dateValue && timeValue ? new Date(`${dateValue}T${timeValue}`) : null
   const endTime =
-    startTime && selectedService ? new Date(startTime.getTime() + selectedService.durationMinutes * 60_000) : null
+    startTime && selectedServices.length > 0 ? new Date(startTime.getTime() + totalDuration * 60_000) : null
 
   async function handleSubmit() {
-    if (!clientId || !serviceId || !startTime || !selectedService) {
+    if (!clientId || serviceIds.length === 0 || !startTime || selectedServices.length === 0) {
       toast.error('Please fill in client, service, date, and time.')
       return
     }
@@ -219,9 +229,9 @@ export function AppointmentDialog({
       if (isEditing && appointment) {
         await updateAppointment(appointment.id, {
           clientId,
-          serviceId,
+          serviceIds,
           startTime,
-          durationMinutes: selectedService.durationMinutes,
+          durationMinutes: totalDuration,
           status,
           notes: notes || undefined,
         })
@@ -229,17 +239,17 @@ export function AppointmentDialog({
       } else {
         await createAppointment({
           clientId,
-          serviceId,
+          serviceIds,
           startTime,
-          durationMinutes: selectedService.durationMinutes,
+          durationMinutes: totalDuration,
           notes: notes || undefined,
         })
         for (const date of additionalDates) {
           await createAppointment({
             clientId,
-            serviceId,
+            serviceIds,
             startTime: date,
-            durationMinutes: selectedService.durationMinutes,
+            durationMinutes: totalDuration,
             notes: notes || undefined,
           })
         }
@@ -378,24 +388,24 @@ export function AppointmentDialog({
           )}
 
           <div className="flex flex-col gap-1.5">
-            <Label>Service</Label>
-            <Select value={serviceId} onValueChange={(v) => setServiceId(v as string)}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a service">
-                  {(value: string | null) => {
-                    const service = services.find((s) => s.id === value)
-                    return service ? `${service.name} (${service.durationMinutes} min)` : 'Select a service'
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {services.map((service) => (
-                  <SelectItem key={service.id} value={service.id}>
-                    {service.name} ({service.durationMinutes} min)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Services</Label>
+            <div className="flex max-h-40 flex-col gap-1 overflow-y-auto rounded-lg border border-input p-2">
+              {services.map((service) => (
+                <label key={service.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={serviceIds.includes(service.id)}
+                    onChange={() => toggleService(service.id)}
+                  />
+                  {service.name} ({service.durationMinutes} min, {formatCurrency(service.price)})
+                </label>
+              ))}
+            </div>
+            {selectedServices.length > 1 && (
+              <p className="text-sm text-muted-foreground">
+                Total: {totalDuration} min, {formatCurrency(totalPrice)}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3">
@@ -515,7 +525,7 @@ export function AppointmentDialog({
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
-          {isEditing && selectedService && (
+          {isEditing && selectedServices.length > 0 && (
             <div className="flex flex-col gap-1.5 rounded-lg border border-input px-3 py-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm">
