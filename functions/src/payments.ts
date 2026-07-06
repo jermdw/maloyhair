@@ -111,11 +111,13 @@ export const createCheckoutCharge = onCall(
         amount,
         currency: 'usd',
         payment_method_types: ['card_present'],
+        // On-reader tipping resolves the tip *before* the card is presented (the customer
+        // picks a tip on the reader, then taps), so by the time this authorizes, `amount`
+        // already includes it — plain automatic capture settles that full amount in one
+        // step. (card_present.manual_preferred was tried here and reverted: it switches to
+        // manual capture, which needs an explicit capture call we weren't making, so the
+        // charge sat authorized in `requires_capture` and the app never saw it as paid.)
         capture_method: 'automatic',
-        // Stripe's recommended pairing for Terminal PaymentIntents — gives the reader room
-        // to fold an on-reader tip into the authorization before it captures, rather than
-        // capturing the pre-tip amount and losing the tip.
-        payment_method_options: { card_present: { capture_method: 'manual_preferred' } },
         receipt_email: client?.email,
         metadata: { appointmentId },
       })
