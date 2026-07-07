@@ -10,13 +10,16 @@ function isOpenDay(date: Date, businessHours: BusinessHours, closedDates: string
   return businessHours[date.getDay()] !== undefined
 }
 
-/** Advances a date forward, day by day, until it lands on a day the salon is actually open. */
-function nextOpenDate(date: Date, businessHours: BusinessHours, closedDates: string[]): Date {
+/** Advances a date forward, day by day, until it lands on a day the salon is actually open.
+ *  Returns `null` if no open day turns up within a year — e.g. business hours haven't
+ *  loaded yet, or every day of the week is closed — rather than looping forever. */
+function nextOpenDate(date: Date, businessHours: BusinessHours, closedDates: string[]): Date | null {
   let candidate = date
-  while (!isOpenDay(candidate, businessHours, closedDates)) {
+  for (let i = 0; i < 366; i++) {
+    if (isOpenDay(candidate, businessHours, closedDates)) return candidate
     candidate = addDays(candidate, 1)
   }
-  return candidate
+  return null
 }
 
 /**
@@ -40,6 +43,9 @@ export function generateRecurringDates(
   // different weekday.
   for (let i = 1; i <= additionalCount; i++) {
     const scheduled = nextOpenDate(addWeeks(firstStart, intervalWeeks * i), businessHours, closedDates)
+    if (!scheduled) {
+      throw new Error('No open business day found for the recurring series — check your business hours in Settings.')
+    }
     scheduled.setHours(hour, minute, 0, 0)
     dates.push(scheduled)
   }

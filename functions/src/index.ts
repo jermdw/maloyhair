@@ -7,6 +7,7 @@ import {
 } from 'firebase-functions/v2/firestore'
 import { onRequest } from 'firebase-functions/v2/https'
 import { setGlobalOptions } from 'firebase-functions/v2'
+import Stripe from 'stripe'
 import { scheduleReminder, cancelReminder } from './reminders.js'
 import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid, stripeSecretKey } from './secrets.js'
 import { findClientIdByPhone, findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
@@ -88,12 +89,32 @@ export const onAppointmentDeleted = onDocumentDeleted(
     ])
 
     if (appointment.payment?.status === 'processing') {
+      const paymentIntentId: string | undefined = appointment.payment?.paymentIntentId
+
       try {
-        await cancelReaderAction(db, appointment.payment?.paymentIntentId)
+        await cancelReaderAction(db, paymentIntentId)
       } catch (err) {
         // Best-effort — the appointment doc is already gone, so there's no payment state
         // left to reconcile here even if this fails; power-cycle the reader if it's stuck.
         console.error('Failed to cancel reader action for deleted appointment:', err)
+      }
+
+      if (paymentIntentId) {
+        try {
+          const stripe = new Stripe(stripeSecretKey.value())
+          await stripe.paymentIntents.cancel(paymentIntentId)
+        } catch (err) {
+          // Most likely means the charge already succeeded before the cancel landed. The
+          // appointment doc is gone, so there's nowhere left in the app to reconcile this —
+          // log loudly with the PaymentIntent ID so it can be found and refunded manually
+          // in the Stripe Dashboard if needed.
+          console.error(
+            `Deleted appointment ${event.params.appointmentId} had an in-flight PaymentIntent ` +
+              `${paymentIntentId} that could not be cancelled — check the Stripe Dashboard for a ` +
+              'possible uncancelled charge:',
+            err,
+          )
+        }
       }
     }
   },
