@@ -511,7 +511,7 @@ export function AppointmentDialog({
             </label>
             {segmentedEnabled && (
               <div className="flex flex-col gap-2 pl-6 text-sm">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   Setup
                   <Input
                     type="number"
@@ -558,7 +558,7 @@ export function AppointmentDialog({
               </label>
               {repeatEnabled && (
                 <div className="flex flex-col gap-2 pl-6">
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     Every
                     <Input
                       type="number"
@@ -569,7 +569,7 @@ export function AppointmentDialog({
                     />
                     weeks
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     <label className="flex items-center gap-1">
                       <input
                         type="radio"
@@ -588,7 +588,7 @@ export function AppointmentDialog({
                     />
                     occurrences
                   </div>
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     <label className="flex items-center gap-1">
                       <input
                         type="radio"

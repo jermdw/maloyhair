@@ -15,7 +15,7 @@ function App() {
       <LoginGate>
         <div className="min-h-screen">
           <Nav />
-          <main className="p-6">
+          <main className="p-4 sm:p-6">
             <Routes>
               <Route path="/" element={<Navigate to="/calendar" replace />} />
               <Route path="/calendar" element={<CalendarPage />} />

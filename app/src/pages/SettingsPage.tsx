@@ -115,7 +115,7 @@ export function SettingsPage() {
         <div className="mt-2 flex flex-col gap-2">
           <Label>Business hours</Label>
           {DAYS.map((day, i) => (
-            <div key={day} className="flex items-center gap-3">
+            <div key={day} className="flex flex-wrap items-center gap-3">
               <label className="flex w-32 items-center gap-2 text-sm">
                 <input
                   type="checkbox"

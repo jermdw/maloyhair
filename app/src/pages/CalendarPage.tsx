@@ -54,7 +54,10 @@ export function CalendarPage() {
   const { services } = useServices()
   const { settings } = useSettings()
 
-  const [view, setView] = useState<View>('month')
+  // A 7-column month grid (or even 5-column work week) is unreadably cramped on a phone —
+  // default to a single day's worth of full-width time slots there instead. Just an initial
+  // guess at mount, not a live media query — the view toggle still lets it be changed either way.
+  const [view, setView] = useState<View>(() => (window.innerWidth < 640 ? 'day' : 'month'))
   const [date, setDate] = useState(new Date())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
@@ -129,7 +132,7 @@ export function CalendarPage() {
         onView={setView}
         date={date}
         onNavigate={setDate}
-        views={['month', 'work_week']}
+        views={['month', 'work_week', 'day']}
         min={minTime}
         max={maxTime}
         style={{ height: 700 }}
