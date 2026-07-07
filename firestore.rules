@@ -38,7 +38,7 @@ service cloud.firestore {
     // Deliberately separate from /appointments so it never touches the live
     // booking/reminder/billing system (see CLAUDE.md-adjacent import notes).
     match /serviceHistory/{entryId} {
-      allow read, write: if isOwner();
+      allow read: if isOwner();
     }
 
     match /{document=**} {

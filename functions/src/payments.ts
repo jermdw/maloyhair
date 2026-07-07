@@ -15,28 +15,36 @@ interface CancelCheckoutChargeRequest {
   appointmentId: string
 }
 
+/** Sanity ceiling on a manually-entered charge amount — well above any realistic salon
+ *  service plus tip, so it only ever catches an input mistake (e.g. "8500" typed instead
+ *  of "85.00"), not a legitimate charge. */
+const MAX_CHARGE_CENTS = 100_000 // $1,000
+
 /**
  * Cancels whatever the reader is currently doing. No-op if no reader is configured, since
- * nothing could have been pushed to it in that case. When `expectedPaymentIntentId` is given,
- * only cancels if the reader's in-flight action is actually for that PaymentIntent — this
- * guards against a stale `processing` appointment (e.g. one whose webhook was missed) from
- * cancelling a *different*, currently-live charge the reader has since moved on to.
+ * nothing could have been pushed to it in that case. Only cancels if the reader's in-flight
+ * action is actually for `expectedPaymentIntentId` — this guards against a stale `processing`
+ * appointment (e.g. one whose webhook was missed) from cancelling a *different*, currently-live
+ * charge the reader has since moved on to. Without a PaymentIntent to match against (the narrow
+ * window between claiming the charge and the PaymentIntent actually being created), there's no
+ * safe way to verify which action belongs to which appointment, so this no-ops rather than risk
+ * cancelling an unrelated charge on the single shared reader.
  */
 export async function cancelReaderAction(
   db: FirebaseFirestore.Firestore,
-  expectedPaymentIntentId?: string,
+  expectedPaymentIntentId: string | undefined,
 ): Promise<void> {
+  if (!expectedPaymentIntentId) return
+
   const settingsSnap = await db.collection('settings').doc('main').get()
   const readerId = settingsSnap.data()?.stripeReaderId
   if (!readerId) return
 
   const stripe = new Stripe(stripeSecretKey.value())
 
-  if (expectedPaymentIntentId) {
-    const reader = await stripe.terminal.readers.retrieve(readerId)
-    const currentPaymentIntentId = 'action' in reader ? reader.action?.process_payment_intent?.payment_intent : undefined
-    if (currentPaymentIntentId !== expectedPaymentIntentId) return
-  }
+  const reader = await stripe.terminal.readers.retrieve(readerId)
+  const currentPaymentIntentId = 'action' in reader ? reader.action?.process_payment_intent?.payment_intent : undefined
+  if (currentPaymentIntentId !== expectedPaymentIntentId) return
 
   await stripe.terminal.readers.cancelAction(readerId)
 }
@@ -58,8 +66,14 @@ export const createCheckoutCharge = onCall(
     if (!appointmentId) {
       throw new HttpsError('invalid-argument', 'appointmentId is required.')
     }
-    if (amountOverride !== undefined && (!Number.isInteger(amountOverride) || amountOverride <= 0)) {
-      throw new HttpsError('invalid-argument', 'amount must be a positive integer number of cents.')
+    if (
+      amountOverride !== undefined &&
+      (!Number.isInteger(amountOverride) || amountOverride <= 0 || amountOverride > MAX_CHARGE_CENTS)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        `amount must be a positive integer number of cents, no more than $${MAX_CHARGE_CENTS / 100}.`,
+      )
     }
 
     const db = getFirestore()
@@ -87,6 +101,13 @@ export const createCheckoutCharge = onCall(
 
     try {
       const serviceIds: string[] = appointment.serviceIds ?? []
+      if (serviceIds.length === 0 && amountOverride === undefined) {
+        throw new HttpsError(
+          'failed-precondition',
+          'This appointment has no services on file — enter a charge amount manually.',
+        )
+      }
+
       const [serviceSnaps, clientSnap, settingsSnap] = await Promise.all([
         Promise.all(serviceIds.map((id: string) => db.collection('services').doc(id).get())),
         db.collection('clients').doc(appointment.clientId).get(),
@@ -158,7 +179,12 @@ export const createCheckoutCharge = onCall(
  * Cancels a charge that's currently waiting on the reader (e.g. the stylist backed out, or
  * the reader appears stuck). Tells the reader to stop the current action, then explicitly
  * cancels the underlying PaymentIntent too — cancelling the reader action alone isn't
- * guaranteed to also cancel the PaymentIntent — and marks the appointment accordingly.
+ * guaranteed to also cancel the PaymentIntent. Only marks the appointment `cancelled` once
+ * the PaymentIntent cancellation is actually confirmed: Stripe only allows cancelling a
+ * PaymentIntent that hasn't already reached a terminal state, so if the customer's card had
+ * already been charged in the moments before this ran, the cancel call fails — in that case
+ * this reconciles Firestore to `paid` (the true outcome) instead of claiming a cancellation
+ * that didn't happen, and tells the owner so they don't also collect cash for the same visit.
  */
 export const cancelCheckoutCharge = onCall(
   { region: 'us-east1', secrets: [stripeSecretKey] },
@@ -173,40 +199,44 @@ export const cancelCheckoutCharge = onCall(
     const db = getFirestore()
     const apptRef = db.collection('appointments').doc(appointmentId)
 
-    let paymentIntentId: string | undefined
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(apptRef)
-      const appt = snap.data()
-      if (!appt) {
-        throw new HttpsError('not-found', 'Appointment not found.')
-      }
-      if (appt.payment?.status !== 'processing') {
-        throw new HttpsError('failed-precondition', 'No charge is currently in progress for this appointment.')
-      }
-      paymentIntentId = appt.payment?.paymentIntentId
-      tx.update(apptRef, {
-        'payment.status': 'cancelled',
-        'payment.updatedAt': FieldValue.serverTimestamp(),
-      })
-    })
-
-    try {
-      await cancelReaderAction(db, paymentIntentId)
-      if (paymentIntentId) {
-        const stripe = new Stripe(stripeSecretKey.value())
-        await stripe.paymentIntents.cancel(paymentIntentId).catch((err) => {
-          // Already succeeded/canceled/etc — nothing more to do; the webhook (if it fires)
-          // will reconcile the appointment's payment status to whatever actually happened.
-          console.error('PaymentIntent cancel no-op:', err)
-        })
-      }
-    } catch (err) {
-      console.error('Failed to cancel reader action:', err)
-      throw new HttpsError(
-        'internal',
-        'Marked as cancelled, but the reader may still be waiting — check it and power-cycle if needed.',
-      )
+    const apptSnap = await apptRef.get()
+    const appt = apptSnap.data()
+    if (!appt) {
+      throw new HttpsError('not-found', 'Appointment not found.')
     }
+    if (appt.payment?.status !== 'processing') {
+      throw new HttpsError('failed-precondition', 'No charge is currently in progress for this appointment.')
+    }
+    const paymentIntentId: string | undefined = appt.payment?.paymentIntentId
+
+    await cancelReaderAction(db, paymentIntentId)
+
+    if (paymentIntentId) {
+      const stripe = new Stripe(stripeSecretKey.value())
+      try {
+        await stripe.paymentIntents.cancel(paymentIntentId)
+      } catch (err) {
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId)
+        if (pi.status === 'succeeded') {
+          await apptRef.update({
+            'payment.status': 'paid',
+            'payment.amount': pi.amount_received,
+            'payment.updatedAt': FieldValue.serverTimestamp(),
+          })
+          throw new HttpsError('failed-precondition', 'This charge already completed and could not be cancelled.')
+        }
+        console.error('Failed to cancel PaymentIntent:', err)
+        throw new HttpsError(
+          'internal',
+          'Failed to cancel the charge. Check the reader/Stripe dashboard before retrying.',
+        )
+      }
+    }
+
+    await apptRef.update({
+      'payment.status': 'cancelled',
+      'payment.updatedAt': FieldValue.serverTimestamp(),
+    })
 
     return { success: true }
   },
@@ -238,6 +268,7 @@ export const stripeWebhook = onRequest(
     async function setPaymentStatus(
       appointmentId: string | undefined,
       status: 'paid' | 'failed',
+      eventPaymentIntentId: string | undefined,
       paymentIntent?: Stripe.PaymentIntent,
     ) {
       if (!appointmentId) return
@@ -250,6 +281,20 @@ export const stripeWebhook = onRequest(
         // this webhook arriving — nothing to update, and there's no point letting
         // Stripe retry a precondition that can never become true again.
         console.error(`Stripe webhook: appointment ${appointmentId} no longer exists.`)
+        return
+      }
+
+      // A cancel-then-retry can leave an appointment with a newer PaymentIntent than the
+      // one this event is about (e.g. a delayed/out-of-order webhook delivery for an
+      // earlier attempt). Don't let a stale event overwrite the outcome of a fresher charge.
+      if (
+        eventPaymentIntentId &&
+        appt.payment?.paymentIntentId &&
+        appt.payment.paymentIntentId !== eventPaymentIntentId
+      ) {
+        console.log(
+          `Stripe webhook: ignoring stale event for superseded PaymentIntent ${eventPaymentIntentId} on appointment ${appointmentId}.`,
+        )
         return
       }
 
@@ -284,12 +329,12 @@ export const stripeWebhook = onRequest(
       switch (event.type) {
         case 'payment_intent.succeeded': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent
-          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'paid', paymentIntent)
+          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'paid', paymentIntent.id, paymentIntent)
           break
         }
         case 'payment_intent.payment_failed': {
           const paymentIntent = event.data.object as Stripe.PaymentIntent
-          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'failed')
+          await setPaymentStatus(paymentIntent.metadata.appointmentId, 'failed', paymentIntent.id)
           break
         }
         case 'terminal.reader.action_failed': {
@@ -302,7 +347,7 @@ export const stripeWebhook = onRequest(
               .limit(1)
               .get()
             if (!matches.empty) {
-              await setPaymentStatus(matches.docs[0].id, 'failed')
+              await setPaymentStatus(matches.docs[0].id, 'failed', paymentIntentId)
             }
           }
           break

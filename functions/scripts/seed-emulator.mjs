@@ -72,7 +72,7 @@ async function seedAppointments(clientIds, serviceIds) {
   const appointments = [
     {
       clientId: clientIds[0],
-      serviceId: serviceIds[0],
+      serviceIds: [serviceIds[0]],
       startTime: Timestamp.fromMillis(now + 2 * 24 * 60 * 60 * 1000),
       endTime: Timestamp.fromMillis(now + 2 * 24 * 60 * 60 * 1000 + 45 * 60 * 1000),
       status: 'booked',
@@ -81,7 +81,7 @@ async function seedAppointments(clientIds, serviceIds) {
     },
     {
       clientId: clientIds[1],
-      serviceId: serviceIds[1],
+      serviceIds: [serviceIds[1]],
       startTime: Timestamp.fromMillis(now - 24 * 60 * 60 * 1000),
       endTime: Timestamp.fromMillis(now - 24 * 60 * 60 * 1000 + 120 * 60 * 1000),
       status: 'completed',

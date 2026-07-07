@@ -29,8 +29,16 @@ const STATUS_COLORS: Record<AppointmentStatus, string> = {
  *  "confirmed" and "completed" otherwise both read as similar greens on the calendar. */
 const PAID_COLOR = '#7A5A3A'
 
+/** Paid, but the appointment was later cancelled or marked no-show — distinct from a plain
+ *  "paid" block, since this combination usually means a refund or follow-up is owed and is
+ *  easy to miss if it just reads as any other paid visit. */
+const PAID_BUT_CANCELLED_COLOR = '#C08A2E'
+
 function eventColor(appointment: Appointment): string {
-  if (appointment.payment?.status === 'paid') return PAID_COLOR
+  const isPaid = appointment.payment?.status === 'paid'
+  const isCancelledOrNoShow = appointment.status === 'cancelled' || appointment.status === 'no_show'
+  if (isPaid && isCancelledOrNoShow) return PAID_BUT_CANCELLED_COLOR
+  if (isPaid) return PAID_COLOR
   return STATUS_COLORS[appointment.status]
 }
 
@@ -70,7 +78,9 @@ export function CalendarPage() {
     () =>
       appointments.flatMap((appt) => {
         const client = clientsById.get(appt.clientId)
-        const serviceNames = (appt.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + ')
+        const serviceNames =
+          (appt.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + ') ||
+          'Unknown service'
         const title = `${client?.name ?? 'Unknown client'} — ${serviceNames}`
 
         // A segmented appointment (e.g. color setup / processing gap / finish) renders as two

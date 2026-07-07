@@ -128,6 +128,20 @@ export function AppointmentDialog({
       setNotes(appointment.notes ?? '')
       setStatus(appointment.status)
 
+      // Seed the charge amount once per appointment (keyed on `appointment` itself, not on
+      // service selection) so it can't leak a stale manually-edited value from whichever
+      // appointment was viewed previously in this same, persistently-mounted dialog. A
+      // still-open payment attempt (failed/cancelled) shows the amount that was actually
+      // attempted; otherwise it defaults to the appointment's current service total.
+      const apptTotal = services
+        .filter((s) => (appointment.serviceIds ?? []).includes(s.id))
+        .reduce((sum, s) => sum + s.price, 0)
+      const priorAttemptAmount =
+        appointment.payment && appointment.payment.status !== 'paid' && appointment.payment.status !== 'unpaid'
+          ? appointment.payment.amount / 100
+          : null
+      setChargeAmount((priorAttemptAmount ?? apptTotal).toFixed(2))
+
       if (appointment.segments && appointment.segments.length === 2) {
         const [setup, finish] = appointment.segments
         const setupStart = setup.startTime.toDate()
@@ -152,6 +166,7 @@ export function AppointmentDialog({
       setTimeValue(isMidnight(start) ? workdayStart(start, settings) : toTimeInputValue(start))
       setNotes('')
       setStatus('booked')
+      setChargeAmount('')
       setSegmentedEnabled(false)
       setSetupMinutes('30')
       setGapMinutes('45')
@@ -162,7 +177,7 @@ export function AppointmentDialog({
     setRepeatMode('count')
     setRepeatCount('6')
     setRepeatUntilDate('')
-  }, [open, appointment, defaultStart, defaultClientId, settings])
+  }, [open, appointment, defaultStart, defaultClientId, settings, services])
 
   const selectedServices = services.filter((s) => serviceIds.includes(s.id))
   const totalDuration = selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0)
@@ -186,7 +201,8 @@ export function AppointmentDialog({
         id: a.id,
         date: a.startTime.toDate(),
         serviceName:
-          (a.serviceIds ?? []).map((id) => services.find((s) => s.id === id)?.name ?? 'Unknown service').join(' + '),
+          (a.serviceIds ?? []).map((id) => services.find((s) => s.id === id)?.name ?? 'Unknown service').join(' + ') ||
+          'Unknown service',
         amount: a.payment!.amount,
       }))
     const imported = importedHistory.map((entry) => ({
@@ -198,9 +214,6 @@ export function AppointmentDialog({
     return [...live, ...imported].sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 3)
   }, [appointments, importedHistory, clientId, appointment?.id, services])
 
-  useEffect(() => {
-    if (selectedServices.length > 0) setChargeAmount(totalPrice.toFixed(2))
-  }, [serviceIds.join(',')])
   const startTime = dateValue && timeValue ? new Date(`${dateValue}T${timeValue}`) : null
 
   // When segmented, this is the source of truth for the visit's actual time blocks — the
@@ -269,13 +282,18 @@ export function AppointmentDialog({
         return
       }
 
-      additionalDates = generateRecurringDates(
-        startTime,
-        intervalWeeks,
-        additionalCount,
-        settings?.businessHours ?? {},
-        settings?.closedDates ?? [],
-      )
+      try {
+        additionalDates = generateRecurringDates(
+          startTime,
+          intervalWeeks,
+          additionalCount,
+          settings?.businessHours ?? {},
+          settings?.closedDates ?? [],
+        )
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to generate the recurring dates.')
+        return
+      }
     }
 
     const visitDurationMinutes = segmentsPreview
