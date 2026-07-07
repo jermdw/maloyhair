@@ -76,6 +76,12 @@
   text-decoration-color: var(--accent);
 }
 
+.legal-script {
+  font-style: italic;
+  padding-left: 1rem;
+  border-left: 2px solid var(--accent);
+}
+
 @media (max-width: 500px) {
   .legal {
     padding-left: 6vw;
