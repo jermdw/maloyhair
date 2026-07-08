@@ -45,6 +45,9 @@ export const onAppointmentUpdated = onDocumentUpdated('appointments/{appointment
   const after = event.data?.after.data()
   if (!before || !after) return
 
+  // Time blocks have no reminders to reset — don't write reminder flags onto them.
+  if (after.type === 'block') return
+
   if (before.startTime.isEqual(after.startTime)) return
 
   await event.data!.after.ref.update({
@@ -124,6 +127,9 @@ export const sendDailyReminders = onSchedule(
 
       for (const apptDoc of snap.docs) {
         const appointment = apptDoc.data()
+        // Time blocks (Alex's own unavailability) share this collection and the
+        // 'booked' status but have no client and never get reminders.
+        if (appointment.type === 'block') continue
         if (appointment.reminders?.[kind]?.sent) continue
 
         const clientSnap = await db.collection('clients').doc(appointment.clientId).get()

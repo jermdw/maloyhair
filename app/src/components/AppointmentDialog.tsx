@@ -121,7 +121,7 @@ export function AppointmentDialog({
 
     if (appointment) {
       const start = appointment.startTime.toDate()
-      setClientId(appointment.clientId)
+      setClientId(appointment.clientId ?? '')
       setServiceIds(appointment.serviceIds ?? [])
       setDateValue(toDateInputValue(start))
       setTimeValue(toTimeInputValue(start))

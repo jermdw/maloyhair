@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const links = [
+  { to: '/', label: 'Home' },
   { to: '/calendar', label: 'Calendar' },
   { to: '/clients', label: 'Clients' },
   { to: '/messages', label: 'Messages' },
@@ -38,6 +39,7 @@ export function Nav() {
               <NavLink
                 key={link.to}
                 to={link.to}
+                end={link.to === '/'}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-1.5 border-b-2 border-transparent pb-1 text-muted-foreground transition-colors hover:text-foreground',
@@ -71,6 +73,7 @@ export function Nav() {
             <NavLink
               key={link.to}
               to={link.to}
+              end={link.to === '/'}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
                 cn('flex items-center gap-1.5 text-muted-foreground', isActive && 'text-foreground')

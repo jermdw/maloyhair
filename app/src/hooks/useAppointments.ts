@@ -111,3 +111,32 @@ export async function updateAppointment(id: string, patch: AppointmentUpdateInpu
 export async function deleteAppointment(id: string) {
   await deleteDoc(doc(db, 'appointments', id))
 }
+
+export interface TimeBlockInput {
+  label: string
+  startTime: Date
+  endTime: Date
+}
+
+/** Blocks share /appointments (same calendar query, same rules) but carry type: 'block',
+ *  a label instead of client/services, and no reminders — the daily reminder sweep and the
+ *  reschedule trigger both skip them explicitly. Status is fixed at 'booked' so date-range
+ *  views that filter on active statuses naturally include them as occupied time. */
+export async function createTimeBlock(input: TimeBlockInput) {
+  await addDoc(collection(db, 'appointments'), {
+    type: 'block',
+    label: input.label,
+    startTime: Timestamp.fromDate(input.startTime),
+    endTime: Timestamp.fromDate(input.endTime),
+    status: 'booked' as AppointmentStatus,
+    createdAt: serverTimestamp(),
+  })
+}
+
+export async function updateTimeBlock(id: string, input: TimeBlockInput) {
+  await updateDoc(doc(db, 'appointments', id), {
+    label: input.label,
+    startTime: Timestamp.fromDate(input.startTime),
+    endTime: Timestamp.fromDate(input.endTime),
+  })
+}

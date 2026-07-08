@@ -7,7 +7,9 @@ import { useClients } from '@/hooks/useClients'
 import { useServices } from '@/hooks/useServices'
 import { useSettings } from '@/hooks/useSettings'
 import { AppointmentDialog } from '@/components/AppointmentDialog'
-import type { Appointment, AppointmentStatus } from '@/types/firestore'
+import { BlockDialog } from '@/components/BlockDialog'
+import { Button } from '@/components/ui/button'
+import { isTimeBlock, type Appointment, type AppointmentStatus } from '@/types/firestore'
 
 const localizer = dateFnsLocalizer({
   format,
@@ -34,12 +36,23 @@ const PAID_COLOR = '#7A5A3A'
  *  easy to miss if it just reads as any other paid visit. */
 const PAID_BUT_CANCELLED_COLOR = '#C08A2E'
 
-function eventColor(appointment: Appointment): string {
+/** Muted warm gray for Alex's own blocked time — visually "not a client", and the hatching
+ *  below keeps it distinct from any status color even for colorblind viewers. */
+const BLOCK_COLOR = '#8A8177'
+
+function eventStyle(appointment: Appointment): React.CSSProperties {
+  if (isTimeBlock(appointment)) {
+    return {
+      backgroundColor: BLOCK_COLOR,
+      backgroundImage:
+        'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(255,255,255,0.18) 6px, rgba(255,255,255,0.18) 12px)',
+    }
+  }
   const isPaid = appointment.payment?.status === 'paid'
   const isCancelledOrNoShow = appointment.status === 'cancelled' || appointment.status === 'no_show'
-  if (isPaid && isCancelledOrNoShow) return PAID_BUT_CANCELLED_COLOR
-  if (isPaid) return PAID_COLOR
-  return STATUS_COLORS[appointment.status]
+  if (isPaid && isCancelledOrNoShow) return { backgroundColor: PAID_BUT_CANCELLED_COLOR }
+  if (isPaid) return { backgroundColor: PAID_COLOR }
+  return { backgroundColor: STATUS_COLORS[appointment.status] }
 }
 
 /** RBC's min/max only care about the time-of-day component, so any date works here. */
@@ -70,6 +83,8 @@ export function CalendarPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null)
   const [prefillStart, setPrefillStart] = useState<Date | undefined>(undefined)
+  const [blockDialogOpen, setBlockDialogOpen] = useState(false)
+  const [editingBlock, setEditingBlock] = useState<Appointment | null>(null)
 
   const clientsById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients])
   const servicesById = useMemo(() => new Map(services.map((s) => [s.id, s])), [services])
@@ -77,7 +92,19 @@ export function CalendarPage() {
   const events = useMemo<CalendarEvent[]>(
     () =>
       appointments.flatMap((appt) => {
-        const client = clientsById.get(appt.clientId)
+        if (isTimeBlock(appt)) {
+          return [
+            {
+              id: appt.id,
+              title: `Blocked — ${appt.label ?? 'unavailable'}`,
+              start: appt.startTime.toDate(),
+              end: appt.endTime.toDate(),
+              resource: appt,
+            },
+          ]
+        }
+
+        const client = appt.clientId ? clientsById.get(appt.clientId) : undefined
         const serviceNames =
           (appt.serviceIds ?? []).map((id) => servicesById.get(id)?.name ?? 'Unknown service').join(' + ') ||
           'Unknown service'
@@ -124,14 +151,29 @@ export function CalendarPage() {
   }
 
   function openEditDialog(appointment: Appointment) {
+    if (isTimeBlock(appointment)) {
+      setEditingBlock(appointment)
+      setBlockDialogOpen(true)
+      return
+    }
     setEditingAppointment(appointment)
     setPrefillStart(undefined)
     setDialogOpen(true)
   }
 
+  function openCreateBlockDialog() {
+    setEditingBlock(null)
+    setBlockDialogOpen(true)
+  }
+
   return (
     <div>
-      <h1 className="mb-4 font-heading text-2xl">Calendar</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="font-heading text-2xl">Calendar</h1>
+        <Button variant="outline" size="sm" onClick={openCreateBlockDialog}>
+          Block time
+        </Button>
+      </div>
       <BigCalendar
         localizer={localizer}
         events={events}
@@ -149,7 +191,7 @@ export function CalendarPage() {
         onSelectSlot={(slotInfo) => openCreateDialog(slotInfo.start)}
         onSelectEvent={(event) => openEditDialog((event as CalendarEvent).resource)}
         eventPropGetter={(event) => ({
-          style: { backgroundColor: eventColor((event as CalendarEvent).resource) },
+          style: eventStyle((event as CalendarEvent).resource),
         })}
       />
       <AppointmentDialog
@@ -160,6 +202,12 @@ export function CalendarPage() {
         defaultStart={prefillStart}
         clients={clients}
         services={services}
+      />
+      <BlockDialog
+        open={blockDialogOpen}
+        onOpenChange={setBlockDialogOpen}
+        block={editingBlock}
+        defaultStart={date}
       />
     </div>
   )

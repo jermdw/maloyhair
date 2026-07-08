@@ -57,11 +57,20 @@ export interface AppointmentSegment {
   label: string
 }
 
+/** Absent (all docs predating time blocks) or 'client' = a real client appointment;
+ *  'block' = Alex's own unavailability (vacation, personal appointments) occupying
+ *  calendar time with a free-text label instead of a client + services. */
+export type AppointmentType = 'client' | 'block'
+
 export interface Appointment {
   id: string
-  clientId: string
-  /** One or more services booked together (e.g. a base service plus an add-on). */
-  serviceIds: string[]
+  type?: AppointmentType
+  /** Blocks only — what this time is blocked for (e.g. "Cruise"). */
+  label?: string
+  /** Client appointments only. */
+  clientId?: string
+  /** One or more services booked together (e.g. a base service plus an add-on). Client appointments only. */
+  serviceIds?: string[]
   /** Overall visit span — segments[0].startTime and segments[last].endTime when segmented. */
   startTime: Timestamp
   endTime: Timestamp
@@ -72,12 +81,18 @@ export interface Appointment {
   segments?: AppointmentSegment[]
   status: AppointmentStatus
   notes?: string
-  reminders: {
+  /** Client appointments only — blocks never send reminders. */
+  reminders?: {
     d3: ReminderState
     d1: ReminderState
   }
   payment?: AppointmentPayment
   createdAt: Timestamp
+}
+
+/** Narrowing helper: true for time-block docs, false for client appointments. */
+export function isTimeBlock(appointment: Appointment): boolean {
+  return appointment.type === 'block'
 }
 
 export interface BusinessHours {
