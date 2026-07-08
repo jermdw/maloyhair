@@ -73,8 +73,8 @@ export interface Appointment {
   status: AppointmentStatus
   notes?: string
   reminders: {
-    h48: ReminderState
-    h2: ReminderState
+    d3: ReminderState
+    d1: ReminderState
   }
   payment?: AppointmentPayment
   createdAt: Timestamp

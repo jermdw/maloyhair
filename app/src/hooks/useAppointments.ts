@@ -70,8 +70,8 @@ export async function createAppointment(input: AppointmentCreateInput) {
     status: 'booked' as AppointmentStatus,
     notes: input.notes,
     reminders: {
-      h48: { sent: false, taskName: null },
-      h2: { sent: false, taskName: null },
+      d3: { sent: false, taskName: null },
+      d1: { sent: false, taskName: null },
     },
     createdAt: serverTimestamp(),
   })
