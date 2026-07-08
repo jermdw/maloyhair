@@ -30,7 +30,12 @@ export async function scheduleReminderTask(
         headers: { 'Content-Type': 'application/json' },
         body: Buffer.from(JSON.stringify({ appointmentId, kind })).toString('base64'),
         oidcToken: {
-          serviceAccountEmail: `${PROJECT}@appspot.gserviceaccount.com`,
+          // The functions run as this project's default compute service account (Gen2
+          // Cloud Functions), not the App Engine default service account — the previous
+          // `${PROJECT}@appspot.gserviceaccount.com` doesn't exist here since App Engine
+          // was never initialized on this project, which silently NOT_FOUND'd every
+          // task creation.
+          serviceAccountEmail: '156605570671-compute@developer.gserviceaccount.com',
         },
       },
       scheduleTime: { seconds: Math.floor(scheduleTime.getTime() / 1000) },
