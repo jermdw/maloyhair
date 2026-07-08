@@ -27,13 +27,13 @@ export interface Service {
 }
 
 /**
- * Tracks one scheduled Cloud Task per reminder. `taskName` is the full Cloud Tasks
- * task resource name, stored so the task can be deleted if the appointment is
- * rescheduled or cancelled before it fires.
+ * Dedupe flag per reminder kind (d3 = 3 days before, d1 = 1 day before). Reminders
+ * are sent by a daily 7 AM Cloud Scheduler sweep that queries appointments by date,
+ * so there's nothing to schedule or cancel per appointment — the flag just records
+ * that a given reminder already went out (and is reset if the appointment moves).
  */
 export interface ReminderState {
   sent: boolean
-  taskName: string | null
 }
 
 export type PaymentStatus = 'unpaid' | 'processing' | 'paid' | 'failed' | 'cancelled'

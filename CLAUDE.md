@@ -26,17 +26,16 @@ app/             React booking app (deployed as Firebase Hosting target "app")
 
 functions/       Cloud Functions v2 (Node 20, TypeScript)
   src/auth.ts       Restricts access to the single owner Google account
-  src/reminders.ts  Appointment reminder scheduling logic
-  src/tasks.ts      Cloud Tasks queue wiring (queue: sms-reminders, region: us-east1)
+  src/reminders.ts  Reminder day-window math (3 days / 1 day before, 7 AM America/New_York, DST-safe)
   src/inbound.ts    Inbound SMS webhook — handles C/X replies, signature validation
   src/secrets.ts    Firebase secret bindings (Twilio credentials)
-  src/index.ts      Function exports
+  src/index.ts      Function exports, incl. the sendDailyReminders 7 AM ET Cloud Scheduler sweep
 
 firestore.rules         Locked to the owner via a custom auth claim (see below)
 firestore.indexes.json
 .firebaserc              Hosting targets: "site" -> maloyhair, "app" -> maloyhair-app
 firebase.json             public/ -> target site, app/dist -> target app (SPA rewrite)
-SETUP.md                  One-time manual setup steps (Firebase Auth, Twilio, secrets, Cloud Tasks)
+SETUP.md                  One-time manual setup steps (Firebase Auth, Twilio, secrets)
 ```
 
 Business contact info (address, phone) is hardcoded independently in `public/index.html`, `privacy.html`, and `terms.html` — no shared template, so update all three if it changes.
@@ -97,4 +96,4 @@ CI (GitHub Actions) handles `public/**` → site and `app/**` → app automatica
 
 ## Setup steps not yet automated
 
-See [SETUP.md](SETUP.md) for the manual console/CLI steps still required (Firebase Auth provider, web app config, Cloud Tasks queue creation, Twilio secrets, webhook wiring). These require credentials that can't be scripted from this repo.
+See [SETUP.md](SETUP.md) for the manual console/CLI steps still required (Firebase Auth provider, web app config, Twilio secrets, webhook wiring). These require credentials that can't be scripted from this repo.

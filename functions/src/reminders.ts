@@ -1,16 +1,14 @@
-import { scheduleReminderTask, deleteReminderTask, type ReminderKind } from './tasks.js'
+export type ReminderKind = 'd3' | 'd1'
 
-const REMINDER_DAYS_BEFORE: Record<ReminderKind, number> = {
+export const REMINDER_DAYS_BEFORE: Record<ReminderKind, number> = {
   d3: 3,
   d1: 1,
 }
 
-const REMINDER_HOUR_LOCAL = 7 // 7:00 AM
-const REMINDER_TIMEZONE = 'America/New_York'
+export const REMINDER_TIMEZONE = 'America/New_York'
 
 export interface ReminderState {
   sent: boolean
-  taskName: string | null
 }
 
 /**
@@ -41,52 +39,28 @@ function zonedTimeToUtc(year: number, month: number, day: number, hour: number, 
   return new Date(guess.getTime() - driftMs)
 }
 
-/** The appointment's calendar date (in REMINDER_TIMEZONE) minus `daysBefore` days, at 7:00 AM local. */
-function reminderFireTime(appointmentStart: Date, daysBefore: number): Date {
+/**
+ * The UTC instant range [start, end) covering the whole REMINDER_TIMEZONE calendar
+ * day that is `daysAhead` days after `now`'s date in that zone. Used by the daily
+ * sweep to ask "which appointments fall on that day?" as a Firestore startTime
+ * range query. DST-safe: day boundaries come from zonedTimeToUtc, so a 23- or
+ * 25-hour day around a transition is still covered exactly.
+ */
+export function upcomingDayRangeUtc(daysAhead: number, now: Date = new Date()): { start: Date; end: Date } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: REMINDER_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(appointmentStart)
+  }).formatToParts(now)
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value)
 
-  // Plain calendar-field subtraction (not a real instant), so this is DST-safe by construction.
-  const targetDateUtcFields = new Date(Date.UTC(get('year'), get('month') - 1, get('day') - daysBefore))
+  // Plain calendar-field addition (not a real instant), so this is DST-safe by construction.
+  const target = new Date(Date.UTC(get('year'), get('month') - 1, get('day') + daysAhead))
+  const next = new Date(Date.UTC(get('year'), get('month') - 1, get('day') + daysAhead + 1))
 
-  return zonedTimeToUtc(
-    targetDateUtcFields.getUTCFullYear(),
-    targetDateUtcFields.getUTCMonth() + 1,
-    targetDateUtcFields.getUTCDate(),
-    REMINDER_HOUR_LOCAL,
-    REMINDER_TIMEZONE,
-  )
-}
-
-/**
- * Schedules a Cloud Task for one reminder kind, unless its fire time has
- * already passed (e.g. booking an appointment less than `daysBefore` days out).
- * In that case it's marked sent:false with no task — the UI can show it was
- * skipped rather than silently dropping it.
- */
-export async function scheduleReminder(
-  appointmentId: string,
-  kind: ReminderKind,
-  startTime: Date,
-  sendReminderUrl: string,
-): Promise<ReminderState> {
-  const fireAt = reminderFireTime(startTime, REMINDER_DAYS_BEFORE[kind])
-
-  if (fireAt.getTime() <= Date.now()) {
-    return { sent: false, taskName: null }
-  }
-
-  const taskName = await scheduleReminderTask(appointmentId, kind, fireAt, sendReminderUrl)
-  return { sent: false, taskName }
-}
-
-export async function cancelReminder(state: ReminderState | undefined): Promise<void> {
-  if (state?.taskName) {
-    await deleteReminderTask(state.taskName)
+  return {
+    start: zonedTimeToUtc(target.getUTCFullYear(), target.getUTCMonth() + 1, target.getUTCDate(), 0, REMINDER_TIMEZONE),
+    end: zonedTimeToUtc(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), 0, REMINDER_TIMEZONE),
   }
 }

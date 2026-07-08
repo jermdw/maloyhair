@@ -26,12 +26,13 @@ The claim takes effect on the owner's next sign-in or token refresh. If she ever
 ### 2. Get the web app config
 In the Firebase console → Project settings → Your apps → add a **Web app** (if one doesn't exist yet), copy the config values into `app/.env.local` (copy from `app/.env.example`).
 
-### 3. Enable Cloud Tasks
-```
-gcloud services enable cloudtasks.googleapis.com --project=maloyhair
-gcloud tasks queues create sms-reminders --location=us-east1 --project=maloyhair
-```
-The queue name (`sms-reminders`) and location (`us-east1`) must match `functions/src/tasks.ts`.
+### 3. Reminder scheduling (nothing to set up)
+Appointment reminders are sent by the `sendDailyReminders` function, a Cloud
+Scheduler cron (7:00 AM America/New_York daily) that `firebase deploy`
+provisions automatically — no queue or manual scheduling infrastructure.
+(The old per-appointment Cloud Tasks queue `sms-reminders` is obsolete and can
+be deleted if it still exists: `gcloud tasks queues delete sms-reminders
+--location=us-east1 --project=maloyhair`.)
 
 ### 4. Twilio
 - Create a [Messaging Service](https://console.twilio.com/us1/develop/sms/services) and add a sender (phone number or alphanumeric sender ID, depending on what your carrier supports).
@@ -43,14 +44,12 @@ firebase functions:secrets:set TWILIO_AUTH_TOKEN --project=maloyhair
 firebase functions:secrets:set TWILIO_MESSAGING_SERVICE_SID --project=maloyhair
 ```
 
-### 5. Deploy functions once, then wire up the reminder URL
+### 5. Deploy functions once, then wire up the inbound webhook URL
 ```
 cd functions && npm run build
 firebase deploy --only functions --project=maloyhair
 ```
-Copy the deployed `sendReminder` HTTPS URL from the output, put it in `functions/.env` as `SEND_REMINDER_URL=<url>` (copy from `functions/.env.example`), then redeploy functions so the trigger picks it up.
-
-Do the same for `handleInboundSms`: copy its deployed URL into `functions/.env` as `HANDLE_INBOUND_SMS_URL=<url>`, then redeploy. This value is also used inside the function itself to validate Twilio's request signature, so it must exactly match the URL Twilio is configured to POST to (step 6).
+Copy the deployed `handleInboundSms` URL from the output into `functions/.env` as `HANDLE_INBOUND_SMS_URL=<url>` (copy from `functions/.env.example`), then redeploy. This value is used inside the function itself to validate Twilio's request signature, so it must exactly match the URL Twilio is configured to POST to (step 6).
 
 ### 6. Wire up the inbound webhook + STOP/HELP
 In the [Twilio console](https://console.twilio.com/us1/develop/sms/services) → your Messaging Service → **Integration**:

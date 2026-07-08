@@ -15,7 +15,6 @@
     "test": "node --import tsx --test src/twilio-import.test.ts"
   },
   "dependencies": {
-    "@google-cloud/tasks": "^5.5.0",
     "firebase-admin": "^13.0.0",
     "firebase-functions": "^6.0.0",
     "stripe": "^22.3.0",
