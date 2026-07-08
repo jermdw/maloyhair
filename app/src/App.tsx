@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
 import { LoginGate } from '@/components/LoginGate'
 import { Nav } from '@/components/Nav'
+import { Toaster } from '@/components/ui/sonner'
 import { CalendarPage } from '@/pages/CalendarPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { ClientsPage } from '@/pages/ClientsPage'
@@ -29,6 +30,7 @@ function App() {
           </main>
         </div>
       </LoginGate>
+      <Toaster />
     </AuthProvider>
   )
 }

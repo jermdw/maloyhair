@@ -1,15 +1,16 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
+// This app has no dark mode / ThemeProvider (see design system in CLAUDE.md — a single
+// fixed light beige/brown palette), so there's no theme to read via next-themes' useTheme()
+// — calling it anyway crashed this component on every render (invalid hook call), which
+// silently ate every toast.success()/toast.error() call in the app.
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="light"
       className="toaster group"
       icons={{
         success: (
