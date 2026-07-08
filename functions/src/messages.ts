@@ -2,6 +2,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 import { HttpsError, onCall } from 'firebase-functions/v2/https'
 import { requireOwner } from './auth.js'
 import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid } from './secrets.js'
+import { createTwilioClient } from './twilioClient.js'
 
 interface SendMessageRequest {
   clientId: string
@@ -30,7 +31,7 @@ export const sendMessage = onCall(
       throw new HttpsError('not-found', 'Client not found.')
     }
 
-    const twilio = (await import('twilio')).default(twilioAccountSid.value(), twilioAuthToken.value())
+    const twilio = await createTwilioClient(twilioAccountSid.value(), twilioAuthToken.value())
 
     try {
       await twilio.messages.create({

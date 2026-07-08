@@ -12,6 +12,7 @@ import { scheduleReminder, cancelReminder } from './reminders.js'
 import { twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid, stripeSecretKey } from './secrets.js'
 import { findClientIdByPhone, findUpcomingAppointmentForPhone, formatAppointmentTime } from './inbound.js'
 import { cancelReaderAction } from './payments.js'
+import { createTwilioClient, loadTwilio } from './twilioClient.js'
 
 export { sendMessage } from './messages.js'
 export { createCheckoutCharge, cancelCheckoutCharge, stripeWebhook } from './payments.js'
@@ -141,10 +142,7 @@ export const sendReminder = onRequest(
       return
     }
 
-    const twilio = (await import('twilio')).default(
-      twilioAccountSid.value(),
-      twilioAuthToken.value(),
-    )
+    const twilio = await createTwilioClient(twilioAccountSid.value(), twilioAuthToken.value())
 
     const when = formatAppointmentTime(appointment.startTime.toDate())
 
@@ -170,7 +168,7 @@ export const sendReminder = onRequest(
 export const handleInboundSms = onRequest(
   { secrets: [twilioAuthToken] },
   async (req, res) => {
-    const twilio = (await import('twilio')).default
+    const twilio = await loadTwilio()
 
     const signature = req.get('X-Twilio-Signature') ?? ''
     const isValid = twilio.validateRequest(
