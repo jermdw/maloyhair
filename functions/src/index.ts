@@ -37,12 +37,12 @@ export const onAppointmentCreated = onDocumentCreated('appointments/{appointment
   const appointment = snap.data()
   const startTime: Date = appointment.startTime.toDate()
 
-  const [h48, h2] = await Promise.all([
-    scheduleReminder(event.params.appointmentId, 'h48', startTime, SEND_REMINDER_URL),
-    scheduleReminder(event.params.appointmentId, 'h2', startTime, SEND_REMINDER_URL),
+  const [d3, d1] = await Promise.all([
+    scheduleReminder(event.params.appointmentId, 'd3', startTime, SEND_REMINDER_URL),
+    scheduleReminder(event.params.appointmentId, 'd1', startTime, SEND_REMINDER_URL),
   ])
 
-  await snap.ref.update({ reminders: { h48, h2 } })
+  await snap.ref.update({ reminders: { d3, d1 } })
 })
 
 export const onAppointmentUpdated = onDocumentUpdated('appointments/{appointmentId}', async (event) => {
@@ -56,26 +56,26 @@ export const onAppointmentUpdated = onDocumentUpdated('appointments/{appointment
   if (!startTimeChanged && !cancelled) return
 
   await Promise.all([
-    cancelReminder(after.reminders?.h48),
-    cancelReminder(after.reminders?.h2),
+    cancelReminder(after.reminders?.d3),
+    cancelReminder(after.reminders?.d1),
   ])
 
   if (cancelled) {
     await event.data!.after.ref.update({
       reminders: {
-        h48: { sent: false, taskName: null },
-        h2: { sent: false, taskName: null },
+        d3: { sent: false, taskName: null },
+        d1: { sent: false, taskName: null },
       },
     })
     return
   }
 
   const startTime: Date = after.startTime.toDate()
-  const [h48, h2] = await Promise.all([
-    scheduleReminder(event.params.appointmentId, 'h48', startTime, SEND_REMINDER_URL),
-    scheduleReminder(event.params.appointmentId, 'h2', startTime, SEND_REMINDER_URL),
+  const [d3, d1] = await Promise.all([
+    scheduleReminder(event.params.appointmentId, 'd3', startTime, SEND_REMINDER_URL),
+    scheduleReminder(event.params.appointmentId, 'd1', startTime, SEND_REMINDER_URL),
   ])
-  await event.data!.after.ref.update({ reminders: { h48, h2 } })
+  await event.data!.after.ref.update({ reminders: { d3, d1 } })
 })
 
 export const onAppointmentDeleted = onDocumentDeleted(
@@ -85,8 +85,8 @@ export const onAppointmentDeleted = onDocumentDeleted(
     if (!appointment) return
 
     await Promise.all([
-      cancelReminder(appointment.reminders?.h48),
-      cancelReminder(appointment.reminders?.h2),
+      cancelReminder(appointment.reminders?.d3),
+      cancelReminder(appointment.reminders?.d1),
     ])
 
     if (appointment.payment?.status === 'processing') {
@@ -125,7 +125,7 @@ export const onAppointmentDeleted = onDocumentDeleted(
 export const sendReminder = onRequest(
   { secrets: [twilioAccountSid, twilioAuthToken, twilioMessagingServiceSid] },
   async (req, res) => {
-    const { appointmentId, kind } = req.body as { appointmentId: string; kind: 'h48' | 'h2' }
+    const { appointmentId, kind } = req.body as { appointmentId: string; kind: 'd3' | 'd1' }
 
     const apptRef = db.collection('appointments').doc(appointmentId)
     const apptSnap = await apptRef.get()

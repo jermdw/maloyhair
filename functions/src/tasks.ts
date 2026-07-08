@@ -6,7 +6,7 @@ const PROJECT = process.env.GCLOUD_PROJECT ?? ''
 const LOCATION = 'us-east1' // must match the region the queue + functions are deployed in
 const QUEUE = 'sms-reminders'
 
-export type ReminderKind = 'h48' | 'h2'
+export type ReminderKind = 'd3' | 'd1'
 
 /**
  * Schedules a Cloud Task that POSTs to the sendReminder function at `scheduleTime`.
