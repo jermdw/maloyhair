@@ -139,7 +139,7 @@ export const sendDailyReminders = onSchedule(
           await twilio.messages.create({
             to: client.phone,
             messagingServiceSid: twilioMessagingServiceSid.value(),
-            body: `Reminder: appointment with Maloy Hair on ${when}. Text ${COMPANY_PHONE} w/questions. C to confirm / X to cancel. Reply STOP to opt out.`,
+            body: `Reminder: appointment with Maloy Hair on ${when}. Respond to this text w/questions. C to confirm / X to cancel. Reply STOP to opt out.`,
           })
         } catch (err) {
           // A failed send is NOT marked sent. It won't retry tomorrow (the appointment
@@ -190,7 +190,7 @@ export const handleInboundSms = onRequest(
       const apptDoc = await findUpcomingAppointmentForPhone(from)
 
       if (!apptDoc) {
-        twiml.message(`We couldn't find an upcoming appointment for this number. Call ${COMPANY_PHONE} for help.`)
+        twiml.message(`We couldn't find an upcoming appointment for this number. Reply to this text with any questions and we'll get back to you.`)
         res.type('text/xml').send(twiml.toString())
         return
       }
