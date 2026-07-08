@@ -170,7 +170,7 @@ export const sendReminder = onRequest(
 export const handleInboundSms = onRequest(
   { secrets: [twilioAuthToken] },
   async (req, res) => {
-    const twilio = await import('twilio')
+    const twilio = (await import('twilio')).default
 
     const signature = req.get('X-Twilio-Signature') ?? ''
     const isValid = twilio.validateRequest(
