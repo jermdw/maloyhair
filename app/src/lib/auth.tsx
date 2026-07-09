@@ -1,31 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import {
-  getRedirectResult,
+  GoogleAuthProvider,
   onAuthStateChanged,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
-  signInWithRedirect,
   signOut,
   type User,
 } from 'firebase/auth'
-import { toast } from 'sonner'
 import { auth, googleProvider } from '@/lib/firebase'
-
-/** Popup-based OAuth is unreliable on mobile WebKit (iOS Safari, and Chrome/Firefox/etc on
- *  iOS, which Apple requires to run on the same WebKit engine as Safari — "Chrome" there is
- *  not Chromium and inherits Safari's popup + third-party storage restrictions). Google's
- *  own guidance is to use a full-page redirect on mobile instead of a popup. */
-function isMobileBrowser(): boolean {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-}
-
-/** Set right before navigating away for signInWithRedirect, checked on the page's next load.
- *  This is plain sessionStorage on our own origin, not Firebase's internal redirect-state
- *  storage — it lets us tell "no sign-in was attempted" apart from "a sign-in was attempted
- *  but Firebase's own pending-redirect state didn't survive the round trip through Google"
- *  (a known WebKit/ITP failure mode: getRedirectResult() silently resolves to null in both
- *  cases, so without this flag the two are indistinguishable). */
-const REDIRECT_PENDING_KEY = 'maloyhair-auth-redirect-pending'
 
 /** Throws if the signed-in user isn't the app's single owner, undoing the sign-in first. */
 async function assertOwner(user: User): Promise<void> {
@@ -39,7 +22,18 @@ async function assertOwner(user: User): Promise<void> {
 interface AuthContextValue {
   user: User | null
   loading: boolean
-  signIn: () => Promise<void>
+  /**
+   * Completes sign-in from a Google Identity Services credential (the JWT the GIS
+   * button hands to its callback). This is the primary sign-in path: GIS delivers
+   * the token directly to the page, so there's no popup hand-back or redirect
+   * round trip for mobile WebKit's tracking prevention to break — which is what
+   * defeated both signInWithPopup and signInWithRedirect on iOS (Safari AND
+   * Chrome, same engine), even with "Prevent Cross-Site Tracking" turned off.
+   */
+  signInWithGoogleIdToken: (idToken: string) => Promise<void>
+  /** Fallback when the GIS script can't load (e.g. blocked by an extension) — the
+   *  original popup flow, which still works fine on desktop browsers. */
+  signInWithGooglePopup: () => Promise<void>
   signInDev: (email: string, password: string) => Promise<void>
   signOutUser: () => Promise<void>
 }
@@ -51,45 +45,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Completes the sign-in started by signInWithRedirect below — the page fully reloads
-    // for that flow, so this is the only place its outcome (including the owner check,
-    // since a rejected sign-in has already resolved by the time onAuthStateChanged fires)
-    // can be surfaced. A plain popup sign-in never reaches here (getRedirectResult
-    // resolves to null when there was no pending redirect).
-    const wasPending = sessionStorage.getItem(REDIRECT_PENDING_KEY) === '1'
-    sessionStorage.removeItem(REDIRECT_PENDING_KEY)
-
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result) return assertOwner(result.user)
-        if (wasPending) {
-          // We definitely left for signInWithRedirect and came back, but Firebase found no
-          // redirect result to process — its own storage for correlating the two ends of the
-          // round trip didn't survive, most likely the browser's cross-site tracking
-          // protection. This is a real, actionable dead end, not a silent no-op.
-          throw new Error(
-            "Sign-in didn't complete after returning from Google — this browser blocked storage the sign-in flow needs. In Settings, try turning off \"Prevent Cross-Site Tracking\" for this site, or use Safari directly instead of Chrome.",
-          )
-        }
-      })
-      .catch((err) => {
-        toast.error(err instanceof Error ? err.message : 'Sign-in failed.')
-      })
-
     return onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
       setLoading(false)
     })
   }, [])
 
-  async function signIn() {
-    if (isMobileBrowser()) {
-      // Navigates away immediately — control returns to the app on reload, handled by
-      // the getRedirectResult effect above, not by this function's caller.
-      sessionStorage.setItem(REDIRECT_PENDING_KEY, '1')
-      await signInWithRedirect(auth, googleProvider)
-      return
-    }
+  async function signInWithGoogleIdToken(idToken: string) {
+    const credential = GoogleAuthProvider.credential(idToken)
+    const result = await signInWithCredential(auth, credential)
+    await assertOwner(result.user)
+  }
+
+  async function signInWithGooglePopup() {
     const result = await signInWithPopup(auth, googleProvider)
     await assertOwner(result.user)
   }
@@ -105,7 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signInDev, signOutUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, signInWithGoogleIdToken, signInWithGooglePopup, signInDev, signOutUser }}
+    >
       {children}
     </AuthContext.Provider>
   )
